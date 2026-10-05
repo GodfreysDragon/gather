@@ -1,0 +1,178 @@
+/**
+ * End-to-end smoke test: drives the real SPA against the real API in headless Edge
+ * (or Chrome), through both transports.
+ *
+ * Needs the API running on a freshly seeded database and the SPA dev server:
+ *   api/  php artisan migrate:fresh --seed && php artisan serve
+ *   web/  npm run dev
+ *   web/  E2E_URL=http://localhost:5173 npm run test:e2e
+ */
+import { mkdirSync } from 'node:fs'
+import { chromium } from 'playwright-core'
+
+const BASE = process.env.E2E_URL ?? 'http://localhost:5173'
+const CHANNEL = process.env.E2E_BROWSER ?? 'msedge'
+const SHOTS = new URL('./screenshots/', import.meta.url)
+mkdirSync(SHOTS, { recursive: true })
+
+let step = 0
+async function check(name, fn) {
+  step++
+  try {
+    await fn()
+    console.log(`  ✓ ${step}. ${name}`)
+  } catch (error) {
+    console.error(`  ✗ ${step}. ${name}\n    ${error.message.split('\n')[0]}`)
+    await page.screenshot({ path: new URL(`failure-${step}.png`, SHOTS).pathname.replace(/^\/(\w:)/, '$1') })
+    await browser.close()
+    process.exit(1)
+  }
+}
+
+function assert(condition, message) {
+  if (!condition) throw new Error(message)
+}
+
+const shot = (name) =>
+  page.screenshot({ path: new URL(`${name}.png`, SHOTS).pathname.replace(/^\/(\w:)/, '$1'), fullPage: true })
+
+const browser = await chromium.launch({ channel: CHANNEL, headless: true })
+const context = await browser.newContext({ viewport: { width: 1280, height: 900 } })
+const page = await context.newPage()
+const consoleErrors = []
+page.on('console', (msg) => msg.type() === 'error' && consoleErrors.push(msg.text()))
+page.on('dialog', (dialog) => dialog.accept())
+
+async function cardTitles() {
+  await page.locator('[data-testid="event-card"]').first().waitFor()
+  await page.waitForFunction(() => !document.querySelector('[aria-busy="true"]'))
+  return page.locator('[data-testid="event-card"] h3').allInnerTexts()
+}
+
+async function useTransport(name) {
+  await page.click(`[data-testid="transport-${name}"]`)
+  await page.waitForFunction(
+    (n) => document.querySelector(`[data-testid="transport-${n}"]`)?.getAttribute('aria-checked') === 'true',
+    name,
+  )
+}
+
+console.log(`Gather e2e against ${BASE} (${CHANNEL})`)
+
+let restTitles = []
+
+await check('event list loads over REST', async () => {
+  await page.goto(BASE)
+  await useTransport('rest')
+  restTitles = await cardTitles()
+  assert(restTitles.length === 12, `expected a full first page of 12, got ${restTitles.length}`)
+  await page.click('[data-testid="api-log-toggle"]')
+  const log = await page.locator('[data-testid="api-log"]').innerText()
+  assert(log.includes('GET /events'), 'API log should show the REST request')
+  await shot('events-rest')
+})
+
+await check('switching to GraphQL renders the same events', async () => {
+  await useTransport('graphql')
+  await page.waitForFunction(() =>
+    document.querySelector('[data-testid="api-log"]')?.textContent?.includes('ListEvents'),
+  )
+  const graphqlTitles = await cardTitles()
+  assert(
+    JSON.stringify(graphqlTitles) === JSON.stringify(restTitles),
+    `REST and GraphQL lists differ:\n${restTitles}\n${graphqlTitles}`,
+  )
+})
+
+await check('filters are applied server-side and reflected in the URL', async () => {
+  await page.fill('[data-testid="search"]', 'meetup')
+  await page.waitForURL(/q=meetup/)
+  const titles = await cardTitles()
+  assert(titles.length >= 1 && titles.every((t) => /meetup/i.test(t)), `unexpected results: ${titles}`)
+  await page.goto(BASE)
+})
+
+await check('logging in with the demo account', async () => {
+  await page.goto(`${BASE}/login`)
+  await page.fill('[data-testid="email"]', 'demo@gather.test')
+  await page.fill('[data-testid="password"]', 'wrong-password')
+  await page.click('[data-testid="submit"]')
+  await page.locator('[data-testid="email-error"]').waitFor()
+  await page.fill('[data-testid="password"]', 'password')
+  await page.click('[data-testid="submit"]')
+  await page.locator('[data-testid="current-user"]', { hasText: 'Demo User' }).waitFor()
+})
+
+for (const transport of ['graphql', 'rest']) {
+  await check(`[${transport}] a sold-out event rejects registration with the server's reason`, async () => {
+    await useTransport(transport)
+    await page.goto(`${BASE}/?q=sold+out`)
+    await page.locator('[data-testid="event-card"]').first().click()
+    await page.click('[data-testid="register"]')
+    const alert = await page.locator('[data-testid="error-alert"]').innerText()
+    assert(alert.includes('has no spots left') && alert.includes('event_full'), `got: ${alert}`)
+  })
+
+  await check(`[${transport}] registering and cancelling update the counts`, async () => {
+    await page.goto(`${BASE}/?has_spots=1`)
+    await page.locator('[data-testid="event-card"]').filter({ hasNotText: 'Going' }).first().click()
+    const before = Number(await page.locator('[data-testid="detail-spots-left"]').innerText())
+    await page.click('[data-testid="register"]')
+    await page.locator('[data-testid="cancel-registration"]').waitFor()
+    const after = Number(await page.locator('[data-testid="detail-spots-left"]').innerText())
+    assert(after === before - 1, `spots ${before} → ${after}`)
+    if (transport === 'rest') await shot('event-registered')
+    await page.click('[data-testid="cancel-registration"]')
+    await page.locator('[data-testid="register"]').waitFor()
+    const restored = Number(await page.locator('[data-testid="detail-spots-left"]').innerText())
+    assert(restored === before, `spots after cancel: ${restored}`)
+  })
+}
+
+for (const transport of ['graphql', 'rest']) {
+  await check(`[${transport}] creating an event shows server validation, then succeeds`, async () => {
+    await useTransport(transport)
+    await page.goto(`${BASE}/events/new`)
+    const title = `E2E ${transport} workshop ${Date.now()}`
+    await page.fill('[data-testid="title"]', title)
+    await page.fill('[data-testid="description"]', 'Created by the end-to-end test.')
+    await page.selectOption('[data-testid="venue"]', { index: 1 })
+    await page.fill('[data-testid="capacity"]', '25')
+    // End before start: only the server knows this is invalid.
+    const start = await page.inputValue('#starts')
+    await page.fill('[data-testid="ends"]', start.replace(/T\d\d/, 'T09'))
+    await page.click('[data-testid="save"]')
+    const message = await page.locator('[data-testid="ends-error"]').innerText()
+    assert(/after/i.test(message), `unexpected validation message: ${message}`)
+    if (transport === 'rest') await shot('validation-error')
+
+    await page.fill('[data-testid="ends"]', start.replace(/T\d\d/, 'T23'))
+    await page.click('[data-testid="save"]')
+    await page.locator('[data-testid="event-title"]', { hasText: title }).waitFor()
+  })
+}
+
+await check('"My events" lists the organized events', async () => {
+  await page.goto(`${BASE}/me`)
+  // .first(): reruns against the same database leave earlier test events behind.
+  await page.locator('[data-testid="event-card"]', { hasText: 'E2E rest workshop' }).first().waitFor()
+  await page.locator('[data-testid="event-card"]', { hasText: 'Draft: Spring hack night' }).waitFor()
+  await shot('my-events')
+})
+
+await check('layout works at phone width', async () => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.goto(BASE)
+  await cardTitles()
+  const overflow = await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth)
+  assert(!overflow, 'page scrolls horizontally on mobile')
+  await shot('events-mobile')
+})
+
+await check('no console errors', async () => {
+  const unexpected = consoleErrors.filter((e) => !/status of (409|422)/.test(e))
+  assert(unexpected.length === 0, unexpected.join('\n'))
+})
+
+await browser.close()
+console.log(`\nAll ${step} checks passed. Screenshots in e2e/screenshots/`)

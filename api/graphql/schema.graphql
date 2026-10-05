@@ -1,0 +1,144 @@
+# Gather GraphQL API.
+#
+# Same domain as the REST API at /api/v1: both transports call the same actions,
+# policies and query scopes. Authenticate by sending the bearer token issued by
+# POST /api/v1/auth/login; GraphQL does not issue tokens itself.
+
+"An ISO 8601 instant, serialized in UTC, e.g. `2026-11-01T18:00:00Z`."
+scalar DateTime @scalar(class: "App\\GraphQL\\Scalars\\DateTime")
+
+type Query {
+    "Events visible to the viewer. Filters behave exactly like GET /api/v1/events."
+    events(
+        "Matches title or description."
+        q: String
+        city: String
+        "Only events starting at or after this instant."
+        from: DateTime
+        "Only events starting at or before this instant."
+        to: DateTime
+        venueId: ID
+        organizerId: ID
+        status: EventStatus
+        "Only published events that still have free spots (drafts and cancelled events are excluded)."
+        hasSpots: Boolean
+        sort: EventSort = STARTS_AT_ASC
+    ): [Event!]! @paginate(defaultCount: 12, maxCount: 50, builder: "App\\GraphQL\\Queries\\Events")
+
+    "A single event, or null if it doesn't exist or isn't visible to the viewer."
+    event(id: ID!): Event @field(resolver: "App\\GraphQL\\Queries\\EventById")
+
+    venues(city: String @eq): [Venue!]! @all @orderBy(column: "name")
+
+    "The authenticated user, or null for anonymous requests."
+    me: Viewer @auth
+}
+
+type Mutation @guard {
+    createEvent(input: CreateEventInput!): Event! @field(resolver: "App\\GraphQL\\Mutations\\EventMutations@create")
+
+    "Partial update: omitted fields keep their current value."
+    updateEvent(id: ID!, input: UpdateEventInput!): Event! @field(resolver: "App\\GraphQL\\Mutations\\EventMutations@update")
+
+    "Only events without registrations can be deleted; cancel the others. Returns the deleted ID."
+    deleteEvent(id: ID!): ID! @field(resolver: "App\\GraphQL\\Mutations\\EventMutations@delete")
+
+    "Idempotent: registering twice returns the existing registration with `created: false`."
+    registerForEvent(eventId: ID!): RegistrationPayload! @field(resolver: "App\\GraphQL\\Mutations\\RegistrationMutations@register")
+
+    "Idempotent: cancelling a registration that doesn't exist is a no-op."
+    cancelRegistration(eventId: ID!): Event! @field(resolver: "App\\GraphQL\\Mutations\\RegistrationMutations@cancel")
+}
+
+type Event {
+    id: ID!
+    title: String!
+    description: String!
+    startsAt: DateTime! @rename(attribute: "starts_at")
+    endsAt: DateTime! @rename(attribute: "ends_at")
+    status: EventStatus! @field(resolver: "App\\GraphQL\\Types\\EventFields@status")
+    capacity: Int!
+    registrationCount: Int! @method(name: "registrationCount")
+    spotsLeft: Int! @method(name: "spotsLeft")
+    viewerIsRegistered: Boolean! @field(resolver: "App\\GraphQL\\Types\\EventFields@viewerIsRegistered")
+    viewerIsOrganizer: Boolean! @field(resolver: "App\\GraphQL\\Types\\EventFields@viewerIsOrganizer")
+    venue: Venue! @belongsTo
+    organizer: User! @belongsTo
+    "Organizer only."
+    attendees: [Registration!]! @canRoot(ability: "viewAttendees") @hasMany(relation: "registrations", type: PAGINATOR, defaultCount: 25, maxCount: 100)
+    createdAt: DateTime! @rename(attribute: "created_at")
+    updatedAt: DateTime! @rename(attribute: "updated_at")
+}
+
+enum EventStatus {
+    DRAFT @enum(value: "draft")
+    PUBLISHED @enum(value: "published")
+    CANCELLED @enum(value: "cancelled")
+}
+
+enum EventSort {
+    STARTS_AT_ASC @enum(value: "starts_at")
+    STARTS_AT_DESC @enum(value: "-starts_at")
+    TITLE_ASC @enum(value: "title")
+    TITLE_DESC @enum(value: "-title")
+    CREATED_AT_ASC @enum(value: "created_at")
+    CREATED_AT_DESC @enum(value: "-created_at")
+}
+
+type Venue {
+    id: ID!
+    name: String!
+    address: String!
+    city: String!
+    capacity: Int!
+}
+
+"A public profile."
+type User {
+    id: ID!
+    name: String!
+}
+
+"The authenticated user, including private fields."
+type Viewer {
+    id: ID!
+    name: String!
+    email: String!
+    "Upcoming events the viewer is registered for, soonest first."
+    registeredEvents: [Event!]! @field(resolver: "App\\GraphQL\\Types\\ViewerFields@registeredEvents")
+    "Events the viewer organizes, including drafts, soonest first."
+    organizedEvents: [Event!]! @field(resolver: "App\\GraphQL\\Types\\ViewerFields@organizedEvents")
+}
+
+type Registration {
+    id: ID!
+    user: User! @belongsTo
+    registeredAt: DateTime! @rename(attribute: "created_at")
+}
+
+type RegistrationPayload {
+    "False if the viewer was already registered."
+    created: Boolean!
+    event: Event!
+}
+
+input CreateEventInput {
+    venueId: ID!
+    title: String!
+    description: String!
+    startsAt: DateTime!
+    endsAt: DateTime!
+    capacity: Int!
+    "DRAFT or PUBLISHED (default)."
+    status: EventStatus
+}
+
+input UpdateEventInput {
+    venueId: ID
+    title: String
+    description: String
+    startsAt: DateTime
+    endsAt: DateTime
+    capacity: Int
+    status: EventStatus
+}
