@@ -1,6 +1,6 @@
 {
   "name": "gather-web",
-  "version": "0.0.0",
+  "version": "1.0.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -13,9 +13,11 @@
     "lint": "run-s \"lint:*\"",
     "lint:oxlint": "oxlint . --fix",
     "lint:eslint": "eslint . --fix --cache",
+    "lint:check": "oxlint . && eslint .",
     "format": "prettier --write --experimental-cli src/",
     "gen:api": "openapi-typescript ../openapi.yaml -o src/api/schema.d.ts",
-    "test:e2e": "node e2e/smoke.mjs"
+    "test:e2e": "node e2e/smoke.mjs",
+    "capture": "node e2e/capture.mjs"
   },
   "dependencies": {
     "openapi-fetch": "^0.17.0",

@@ -18,13 +18,15 @@ const open = ref(false)
         <span class="font-semibold">API traffic</span>
         <button
           type="button"
-          class="text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
+          class="text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
           @click="clearApiLog"
         >
           Clear
         </button>
       </div>
-      <p v-if="apiLog.entries.length === 0" class="px-3 py-4 text-slate-500">No requests yet.</p>
+      <p v-if="apiLog.entries.length === 0" class="px-3 py-4 text-slate-500 dark:text-slate-400">
+        No requests yet.
+      </p>
       <ol class="divide-y divide-slate-100 dark:divide-slate-800">
         <li
           v-for="entry in apiLog.entries"
@@ -46,13 +48,17 @@ const open = ref(false)
             :class="
               entry.status === 'error' || (typeof entry.status === 'number' && entry.status >= 400)
                 ? 'text-red-600 dark:text-red-400'
-                : 'text-slate-500'
+                : 'text-slate-500 dark:text-slate-400'
             "
           >
             {{ entry.status }}
           </span>
-          <span class="w-12 text-right text-slate-500">{{ entry.durationMs }}ms</span>
-          <span class="w-14 text-right text-slate-500">{{ formatBytes(entry.bytes) }}</span>
+          <span class="w-12 text-right text-slate-500 dark:text-slate-400"
+            >{{ entry.durationMs }}ms</span
+          >
+          <span class="w-14 text-right text-slate-500 dark:text-slate-400">{{
+            formatBytes(entry.bytes)
+          }}</span>
         </li>
       </ol>
     </div>

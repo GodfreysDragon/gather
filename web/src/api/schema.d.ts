@@ -4,929 +4,979 @@
  */
 
 export interface paths {
-  '/auth/register': {
-    parameters: {
-      query?: never
-      header?: never
-      path?: never
-      cookie?: never
-    }
-    get?: never
-    put?: never
-    /** Create an account and receive a token */
-    post: operations['register']
-    delete?: never
-    options?: never
-    head?: never
-    patch?: never
-    trace?: never
-  }
-  '/auth/login': {
-    parameters: {
-      query?: never
-      header?: never
-      path?: never
-      cookie?: never
-    }
-    get?: never
-    put?: never
-    /** Exchange credentials for a token */
-    post: operations['login']
-    delete?: never
-    options?: never
-    head?: never
-    patch?: never
-    trace?: never
-  }
-  '/auth/logout': {
-    parameters: {
-      query?: never
-      header?: never
-      path?: never
-      cookie?: never
-    }
-    get?: never
-    put?: never
-    /** Revoke the token used for this request */
-    post: operations['logout']
-    delete?: never
-    options?: never
-    head?: never
-    patch?: never
-    trace?: never
-  }
-  '/me': {
-    parameters: {
-      query?: never
-      header?: never
-      path?: never
-      cookie?: never
-    }
-    /** The authenticated user */
-    get: operations['getMe']
-    put?: never
-    post?: never
-    delete?: never
-    options?: never
-    head?: never
-    patch?: never
-    trace?: never
-  }
-  '/me/registrations': {
-    parameters: {
-      query?: never
-      header?: never
-      path?: never
-      cookie?: never
-    }
-    /** Upcoming events the authenticated user is registered for */
-    get: operations['listMyRegistrations']
-    put?: never
-    post?: never
-    delete?: never
-    options?: never
-    head?: never
-    patch?: never
-    trace?: never
-  }
-  '/events': {
-    parameters: {
-      query?: never
-      header?: never
-      path?: never
-      cookie?: never
-    }
-    /**
-     * List events
-     * @description Published and cancelled events, plus drafts organized by the caller.
-     *     Filters are combined with AND.
-     */
-    get: operations['listEvents']
-    put?: never
-    /** Create an event (you become its organizer) */
-    post: operations['createEvent']
-    delete?: never
-    options?: never
-    head?: never
-    patch?: never
-    trace?: never
-  }
-  '/events/{event}': {
-    parameters: {
-      query?: never
-      header?: never
-      path: {
-        event: components['parameters']['EventId']
-      }
-      cookie?: never
-    }
-    /** Get an event */
-    get: operations['getEvent']
-    put?: never
-    post?: never
-    /**
-     * Delete an event (organizer only)
-     * @description Only events nobody has registered for can be deleted (`409 event-has-registrations` otherwise); cancel those instead.
-     */
-    delete: operations['deleteEvent']
-    options?: never
-    head?: never
-    /**
-     * Update an event (organizer only)
-     * @description Partial update. Omitted fields keep their current value. Set `status` to `cancelled` to cancel.
-     */
-    patch: operations['updateEvent']
-    trace?: never
-  }
-  '/events/{event}/attendees': {
-    parameters: {
-      query?: never
-      header?: never
-      path: {
-        event: components['parameters']['EventId']
-      }
-      cookie?: never
-    }
-    /** List an event's registrations (organizer only) */
-    get: operations['listAttendees']
-    put?: never
-    post?: never
-    delete?: never
-    options?: never
-    head?: never
-    patch?: never
-    trace?: never
-  }
-  '/events/{event}/registration': {
-    parameters: {
-      query?: never
-      header?: never
-      path: {
-        event: components['parameters']['EventId']
-      }
-      cookie?: never
-    }
-    get?: never
-    /**
-     * Register the caller for an event
-     * @description Idempotent. Returns `201` when a registration is created and `200` when the
-     *     caller was already registered, so retries are always safe.
-     */
-    put: operations['registerForEvent']
-    post?: never
-    /**
-     * Cancel the caller's registration
-     * @description Idempotent. Succeeds even if the caller was not registered.
-     */
-    delete: operations['cancelRegistration']
-    options?: never
-    head?: never
-    patch?: never
-    trace?: never
-  }
-  '/venues': {
-    parameters: {
-      query?: never
-      header?: never
-      path?: never
-      cookie?: never
-    }
-    /** List venues */
-    get: operations['listVenues']
-    put?: never
-    /** Create a venue */
-    post: operations['createVenue']
-    delete?: never
-    options?: never
-    head?: never
-    patch?: never
-    trace?: never
-  }
-  '/venues/{venue}': {
-    parameters: {
-      query?: never
-      header?: never
-      path: {
-        venue: number
-      }
-      cookie?: never
-    }
-    /** Get a venue */
-    get: operations['getVenue']
-    put?: never
-    post?: never
-    delete?: never
-    options?: never
-    head?: never
-    patch?: never
-    trace?: never
-  }
+    "/auth/register": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create an account and receive a token */
+        post: operations["register"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/login": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Exchange credentials for a token */
+        post: operations["login"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/logout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Revoke the token used for this request */
+        post: operations["logout"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The authenticated user */
+        get: operations["getMe"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/me/registrations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Upcoming events the authenticated user is registered for */
+        get: operations["listMyRegistrations"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List events
+         * @description Published and cancelled events, plus drafts organized by the caller.
+         *     Filters are combined with AND.
+         */
+        get: operations["listEvents"];
+        put?: never;
+        /** Create an event (you become its organizer) */
+        post: operations["createEvent"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/events/{event}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                event: components["parameters"]["EventId"];
+            };
+            cookie?: never;
+        };
+        /** Get an event */
+        get: operations["getEvent"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete an event (organizer only)
+         * @description Only events nobody has registered for can be deleted (`409 event-has-registrations` otherwise); cancel those instead.
+         */
+        delete: operations["deleteEvent"];
+        options?: never;
+        head?: never;
+        /**
+         * Update an event (organizer only)
+         * @description Partial update. Omitted fields keep their current value. Set `status` to `cancelled` to cancel.
+         *     An event people have registered for can't go back to `draft` (`409 event-has-registrations`).
+         *     Someone else's draft is `404`, not `403`, so its existence isn't revealed.
+         */
+        patch: operations["updateEvent"];
+        trace?: never;
+    };
+    "/events/{event}/attendees": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                event: components["parameters"]["EventId"];
+            };
+            cookie?: never;
+        };
+        /** List an event's registrations (organizer only) */
+        get: operations["listAttendees"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/events/{event}/registration": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                event: components["parameters"]["EventId"];
+            };
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Register the caller for an event
+         * @description Idempotent. Returns `201` when a registration is created and `200` when the
+         *     caller was already registered, so retries are always safe.
+         */
+        put: operations["registerForEvent"];
+        post?: never;
+        /**
+         * Cancel the caller's registration
+         * @description Idempotent. Succeeds even if the caller was not registered.
+         */
+        delete: operations["cancelRegistration"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/venues": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List venues */
+        get: operations["listVenues"];
+        put?: never;
+        /** Create a venue */
+        post: operations["createVenue"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/venues/{venue}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                venue: number;
+            };
+            cookie?: never;
+        };
+        /** Get a venue */
+        get: operations["getVenue"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
-export type webhooks = Record<string, never>
+export type webhooks = Record<string, never>;
 export interface components {
-  schemas: {
-    /** @description RFC 9457 problem details. */
-    Problem: {
-      /**
-       * @description `about:blank` for plain HTTP errors, otherwise a URI ending in a stable error code (e.g. `/problems/event-full`).
-       * @example http://localhost:8000/problems/event-full
-       */
-      type: string
-      /** @example Event is full */
-      title: string
-      /** @example 409 */
-      status: number
-      /** @example "Vue.js Meetup" has no spots left. */
-      detail?: string
-    }
-    ValidationProblem: components['schemas']['Problem'] & {
-      /**
-       * @description Messages per field.
-       * @example {
-       *       "ends_at": [
-       *         "The ends at field must be a date after starts at."
-       *       ]
-       *     }
-       */
-      errors: {
-        [key: string]: string[]
-      }
-    }
-    TokenResponse: {
-      /** @example 1|q8Cw0bH9pS... */
-      token: string
-      /** @enum {string} */
-      token_type: 'Bearer'
-      user: components['schemas']['User']
-    }
-    User: {
-      id: number
-      name: string
-      /**
-       * Format: email
-       * @description Only present for the authenticated user themself.
-       */
-      email?: string
-    }
-    Venue: {
-      id: number
-      name: string
-      address: string
-      city: string
-      capacity: number
-    }
-    /** @enum {string} */
-    EventStatus: 'draft' | 'published' | 'cancelled'
-    Event: {
-      id: number
-      title: string
-      description: string
-      /**
-       * Format: date-time
-       * @example 2026-11-01T18:00:00Z
-       */
-      starts_at: string
-      /** Format: date-time */
-      ends_at: string
-      status: components['schemas']['EventStatus']
-      capacity: number
-      registration_count: number
-      spots_left: number
-      /** @description Facts about the event relative to the caller (all false when anonymous). */
-      viewer: {
-        is_registered: boolean
-        is_organizer: boolean
-      }
-      venue: components['schemas']['Venue']
-      organizer: components['schemas']['User']
-      /** Format: date-time */
-      created_at: string
-      /** Format: date-time */
-      updated_at: string
-      links: {
-        /** Format: uri */
-        self: string
-        /** Format: uri */
-        registration: string
-      }
-    }
-    EventInput: {
-      venue_id: number
-      title: string
-      description: string
-      /**
-       * Format: date-time
-       * @description Must be in the future.
-       */
-      starts_at: string
-      /**
-       * Format: date-time
-       * @description Must be after `starts_at`.
-       */
-      ends_at: string
-      /** @description May not exceed the venue's capacity. */
-      capacity: number
-      /**
-       * @description Defaults to `published`.
-       * @enum {string}
-       */
-      status?: 'draft' | 'published'
-    }
-    /** @description Any subset of the event fields. `capacity` may not drop below the current registration count (`409 capacity-conflict`). */
-    EventPatch: {
-      venue_id?: number
-      title?: string
-      description?: string
-      /** Format: date-time */
-      starts_at?: string
-      /** Format: date-time */
-      ends_at?: string
-      capacity?: number
-      status?: components['schemas']['EventStatus']
-    }
-    Registration: {
-      id: number
-      event_id: number
-      user?: components['schemas']['User']
-      event?: components['schemas']['Event']
-      /** Format: date-time */
-      registered_at: string
-    }
-    RegistrationEnvelope: {
-      data: components['schemas']['Registration']
-    }
-    PaginationLinks: {
-      /** Format: uri */
-      first: string | null
-      /** Format: uri */
-      last: string | null
-      /** Format: uri */
-      prev: string | null
-      /** Format: uri */
-      next: string | null
-    }
-    PaginationMeta: {
-      current_page: number
-      last_page: number
-      per_page: number
-      total: number
-      from: number | null
-      to: number | null
-      path: string
-      /** @description Page links for rendering a pager. */
-      links?: {
-        url?: string | null
-        label?: string
-        active?: boolean
-      }[]
-    }
-  }
-  responses: {
-    /** @description The representation matching `If-None-Match` is still current. */
-    NotModified: {
-      headers: {
-        [name: string]: unknown
-      }
-      content?: never
-    }
-    /** @description Missing or invalid bearer token */
-    Unauthenticated: {
-      headers: {
-        [name: string]: unknown
-      }
-      content: {
-        'application/problem+json': components['schemas']['Problem']
-      }
-    }
-    /** @description Authenticated, but not allowed (e.g. not the organizer) */
-    Forbidden: {
-      headers: {
-        [name: string]: unknown
-      }
-      content: {
-        'application/problem+json': components['schemas']['Problem']
-      }
-    }
-    /** @description No such resource */
-    NotFound: {
-      headers: {
-        [name: string]: unknown
-      }
-      content: {
-        'application/problem+json': components['schemas']['Problem']
-      }
-    }
-    /** @description A business rule prevents this change; see `type`. */
-    Conflict: {
-      headers: {
-        [name: string]: unknown
-      }
-      content: {
-        'application/problem+json': components['schemas']['Problem']
-      }
-    }
-    /** @description The request body or query failed validation */
-    ValidationFailed: {
-      headers: {
-        [name: string]: unknown
-      }
-      content: {
-        'application/problem+json': components['schemas']['ValidationProblem']
-      }
-    }
-    /** @description Rate limit exceeded; see `Retry-After`. */
-    TooManyRequests: {
-      headers: {
-        'Retry-After'?: number
-        [name: string]: unknown
-      }
-      content: {
-        'application/problem+json': components['schemas']['Problem']
-      }
-    }
-  }
-  parameters: {
-    EventId: number
-  }
-  requestBodies: never
-  headers: {
-    /** @description Weak validator for conditional requests (`If-None-Match`). */
-    ETag: string
-  }
-  pathItems: never
+    schemas: {
+        /** @description RFC 9457 problem details. */
+        Problem: {
+            /**
+             * @description `about:blank` for plain HTTP errors, otherwise a URI ending in a stable error code (e.g. `/problems/event-full`).
+             * @example http://localhost:8000/problems/event-full
+             */
+            type: string;
+            /** @example Event is full */
+            title: string;
+            /** @example 409 */
+            status: number;
+            /** @example "Vue.js Meetup" has no spots left. */
+            detail?: string;
+        };
+        ValidationProblem: components["schemas"]["Problem"] & {
+            /**
+             * @description Messages per field.
+             * @example {
+             *       "ends_at": [
+             *         "The ends at field must be a date after starts at."
+             *       ]
+             *     }
+             */
+            errors: {
+                [key: string]: string[];
+            };
+        };
+        TokenResponse: {
+            /** @example 1|q8Cw0bH9pS... */
+            token: string;
+            /** @enum {string} */
+            token_type: "Bearer";
+            user: components["schemas"]["User"];
+        };
+        User: {
+            id: number;
+            name: string;
+            /**
+             * Format: email
+             * @description Only present for the authenticated user themself.
+             */
+            email?: string;
+        };
+        Venue: {
+            id: number;
+            name: string;
+            address: string;
+            city: string;
+            capacity: number;
+        };
+        /** @enum {string} */
+        EventStatus: "draft" | "published" | "cancelled";
+        Event: {
+            id: number;
+            title: string;
+            description: string;
+            /**
+             * Format: date-time
+             * @example 2026-11-01T18:00:00Z
+             */
+            starts_at: string;
+            /** Format: date-time */
+            ends_at: string;
+            status: components["schemas"]["EventStatus"];
+            capacity: number;
+            registration_count: number;
+            spots_left: number;
+            /** @description Facts about the event relative to the caller (all false when anonymous). */
+            viewer: {
+                is_registered: boolean;
+                is_organizer: boolean;
+            };
+            venue: components["schemas"]["Venue"];
+            organizer: components["schemas"]["User"];
+            /** Format: date-time */
+            created_at: string;
+            /** Format: date-time */
+            updated_at: string;
+            links: {
+                /** Format: uri */
+                self: string;
+                /** Format: uri */
+                registration: string;
+            };
+        };
+        EventInput: {
+            venue_id: number;
+            title: string;
+            description: string;
+            /**
+             * Format: date-time
+             * @description Must be in the future.
+             */
+            starts_at: string;
+            /**
+             * Format: date-time
+             * @description Must be after `starts_at`.
+             */
+            ends_at: string;
+            /** @description May not exceed the venue's capacity. */
+            capacity: number;
+            /**
+             * @description Defaults to `published`.
+             * @enum {string}
+             */
+            status?: "draft" | "published";
+        };
+        /**
+         * @description Any non-empty subset of the event fields. `capacity` may not drop below the current registration
+         *     count (`409 capacity-conflict`), and the event's capacity must still fit the venue after a `venue_id` change.
+         */
+        EventPatch: {
+            venue_id?: number;
+            title?: string;
+            description?: string;
+            /** Format: date-time */
+            starts_at?: string;
+            /** Format: date-time */
+            ends_at?: string;
+            capacity?: number;
+            status?: components["schemas"]["EventStatus"];
+        };
+        Registration: {
+            id: number;
+            event_id: number;
+            user?: components["schemas"]["User"];
+            event?: components["schemas"]["Event"];
+            /** Format: date-time */
+            registered_at: string;
+        };
+        RegistrationEnvelope: {
+            data: components["schemas"]["Registration"];
+        };
+        PaginationLinks: {
+            /** Format: uri */
+            first: string | null;
+            /** Format: uri */
+            last: string | null;
+            /** Format: uri */
+            prev: string | null;
+            /** Format: uri */
+            next: string | null;
+        };
+        PaginationMeta: {
+            current_page: number;
+            last_page: number;
+            per_page: number;
+            total: number;
+            from: number | null;
+            to: number | null;
+            path: string;
+            /** @description Page links for rendering a pager. */
+            links?: {
+                url?: string | null;
+                label?: string;
+                active?: boolean;
+            }[];
+        };
+    };
+    responses: {
+        /** @description The representation matching `If-None-Match` is still current. */
+        NotModified: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content?: never;
+        };
+        /** @description Missing or invalid bearer token */
+        Unauthenticated: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/problem+json": components["schemas"]["Problem"];
+            };
+        };
+        /** @description Authenticated, but not allowed (e.g. not the organizer) */
+        Forbidden: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/problem+json": components["schemas"]["Problem"];
+            };
+        };
+        /** @description No such resource */
+        NotFound: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/problem+json": components["schemas"]["Problem"];
+            };
+        };
+        /** @description A business rule prevents this change; see `type`. */
+        Conflict: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/problem+json": components["schemas"]["Problem"];
+            };
+        };
+        /** @description The request body or query failed validation */
+        ValidationFailed: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/problem+json": components["schemas"]["ValidationProblem"];
+            };
+        };
+        /** @description Unexpected server error */
+        ServerError: {
+            headers: {
+                [name: string]: unknown;
+            };
+            content: {
+                "application/problem+json": components["schemas"]["Problem"];
+            };
+        };
+        /** @description Rate limit exceeded; see `Retry-After`. */
+        TooManyRequests: {
+            headers: {
+                "Retry-After"?: number;
+                [name: string]: unknown;
+            };
+            content: {
+                "application/problem+json": components["schemas"]["Problem"];
+            };
+        };
+    };
+    parameters: {
+        EventId: number;
+    };
+    requestBodies: never;
+    headers: {
+        /** @description Weak validator for conditional requests (`If-None-Match`). */
+        ETag: string;
+    };
+    pathItems: never;
 }
-export type $defs = Record<string, never>
+export type $defs = Record<string, never>;
 export interface operations {
-  register: {
-    parameters: {
-      query?: never
-      header?: never
-      path?: never
-      cookie?: never
-    }
-    requestBody: {
-      content: {
-        'application/json': {
-          name: string
-          /** Format: email */
-          email: string
-          password: string
-          /** @description Label for the token, e.g. "web" or "iPhone". */
-          device_name?: string
-        }
-      }
-    }
-    responses: {
-      /** @description Account created */
-      201: {
-        headers: {
-          [name: string]: unknown
-        }
-        content: {
-          'application/json': components['schemas']['TokenResponse']
-        }
-      }
-      422: components['responses']['ValidationFailed']
-      429: components['responses']['TooManyRequests']
-    }
-  }
-  login: {
-    parameters: {
-      query?: never
-      header?: never
-      path?: never
-      cookie?: never
-    }
-    requestBody: {
-      content: {
-        'application/json': {
-          /** Format: email */
-          email: string
-          password: string
-          device_name?: string
-        }
-      }
-    }
-    responses: {
-      /** @description Authenticated */
-      200: {
-        headers: {
-          [name: string]: unknown
-        }
-        content: {
-          'application/json': components['schemas']['TokenResponse']
-        }
-      }
-      422: components['responses']['ValidationFailed']
-      429: components['responses']['TooManyRequests']
-    }
-  }
-  logout: {
-    parameters: {
-      query?: never
-      header?: never
-      path?: never
-      cookie?: never
-    }
-    requestBody?: never
-    responses: {
-      /** @description Token revoked */
-      204: {
-        headers: {
-          [name: string]: unknown
-        }
-        content?: never
-      }
-      401: components['responses']['Unauthenticated']
-    }
-  }
-  getMe: {
-    parameters: {
-      query?: never
-      header?: never
-      path?: never
-      cookie?: never
-    }
-    requestBody?: never
-    responses: {
-      /** @description OK */
-      200: {
-        headers: {
-          ETag: components['headers']['ETag']
-          [name: string]: unknown
-        }
-        content: {
-          'application/json': {
-            data: components['schemas']['User']
-          }
-        }
-      }
-      401: components['responses']['Unauthenticated']
-    }
-  }
-  listMyRegistrations: {
-    parameters: {
-      query?: never
-      header?: never
-      path?: never
-      cookie?: never
-    }
-    requestBody?: never
-    responses: {
-      /** @description OK */
-      200: {
-        headers: {
-          [name: string]: unknown
-        }
-        content: {
-          'application/json': {
-            data: components['schemas']['Event'][]
-          }
-        }
-      }
-      401: components['responses']['Unauthenticated']
-    }
-  }
-  listEvents: {
-    parameters: {
-      query?: {
-        /** @description Matches title or description. */
-        q?: string
-        city?: string
-        /** @description Only events starting at or after this instant. */
-        from?: string
-        /** @description Only events starting at or before this instant. */
-        to?: string
-        venue_id?: number
-        organizer_id?: number
-        status?: components['schemas']['EventStatus']
-        /** @description Only published events that still have free spots (drafts and cancelled events are excluded). */
-        has_spots?: 'true' | 'false' | '1' | '0'
-        /** @description Sort key; prefix with `-` for descending. */
-        sort?: 'starts_at' | '-starts_at' | 'title' | '-title' | 'created_at' | '-created_at'
-        page?: number
-        per_page?: number
-      }
-      header?: never
-      path?: never
-      cookie?: never
-    }
-    requestBody?: never
-    responses: {
-      /** @description A page of events */
-      200: {
-        headers: {
-          ETag: components['headers']['ETag']
-          [name: string]: unknown
-        }
-        content: {
-          'application/json': {
-            data: components['schemas']['Event'][]
-            links: components['schemas']['PaginationLinks']
-            meta: components['schemas']['PaginationMeta']
-          }
-        }
-      }
-      304: components['responses']['NotModified']
-      422: components['responses']['ValidationFailed']
-    }
-  }
-  createEvent: {
-    parameters: {
-      query?: never
-      header?: never
-      path?: never
-      cookie?: never
-    }
-    requestBody: {
-      content: {
-        'application/json': components['schemas']['EventInput']
-      }
-    }
-    responses: {
-      /** @description Created */
-      201: {
-        headers: {
-          /** @description URL of the new event. */
-          Location?: string
-          [name: string]: unknown
-        }
-        content: {
-          'application/json': {
-            data: components['schemas']['Event']
-          }
-        }
-      }
-      401: components['responses']['Unauthenticated']
-      422: components['responses']['ValidationFailed']
-    }
-  }
-  getEvent: {
-    parameters: {
-      query?: never
-      header?: never
-      path: {
-        event: components['parameters']['EventId']
-      }
-      cookie?: never
-    }
-    requestBody?: never
-    responses: {
-      /** @description OK */
-      200: {
-        headers: {
-          ETag: components['headers']['ETag']
-          [name: string]: unknown
-        }
-        content: {
-          'application/json': {
-            data: components['schemas']['Event']
-          }
-        }
-      }
-      304: components['responses']['NotModified']
-      403: components['responses']['Forbidden']
-      404: components['responses']['NotFound']
-    }
-  }
-  deleteEvent: {
-    parameters: {
-      query?: never
-      header?: never
-      path: {
-        event: components['parameters']['EventId']
-      }
-      cookie?: never
-    }
-    requestBody?: never
-    responses: {
-      /** @description Deleted */
-      204: {
-        headers: {
-          [name: string]: unknown
-        }
-        content?: never
-      }
-      401: components['responses']['Unauthenticated']
-      403: components['responses']['Forbidden']
-      404: components['responses']['NotFound']
-      409: components['responses']['Conflict']
-    }
-  }
-  updateEvent: {
-    parameters: {
-      query?: never
-      header?: never
-      path: {
-        event: components['parameters']['EventId']
-      }
-      cookie?: never
-    }
-    requestBody: {
-      content: {
-        'application/json': components['schemas']['EventPatch']
-      }
-    }
-    responses: {
-      /** @description Updated */
-      200: {
-        headers: {
-          [name: string]: unknown
-        }
-        content: {
-          'application/json': {
-            data: components['schemas']['Event']
-          }
-        }
-      }
-      401: components['responses']['Unauthenticated']
-      403: components['responses']['Forbidden']
-      404: components['responses']['NotFound']
-      409: components['responses']['Conflict']
-      422: components['responses']['ValidationFailed']
-    }
-  }
-  listAttendees: {
-    parameters: {
-      query?: {
-        page?: number
-        per_page?: number
-      }
-      header?: never
-      path: {
-        event: components['parameters']['EventId']
-      }
-      cookie?: never
-    }
-    requestBody?: never
-    responses: {
-      /** @description A page of registrations */
-      200: {
-        headers: {
-          [name: string]: unknown
-        }
-        content: {
-          'application/json': {
-            data: components['schemas']['Registration'][]
-            links: components['schemas']['PaginationLinks']
-            meta: components['schemas']['PaginationMeta']
-          }
-        }
-      }
-      401: components['responses']['Unauthenticated']
-      403: components['responses']['Forbidden']
-      404: components['responses']['NotFound']
-    }
-  }
-  registerForEvent: {
-    parameters: {
-      query?: never
-      header?: never
-      path: {
-        event: components['parameters']['EventId']
-      }
-      cookie?: never
-    }
-    requestBody?: never
-    responses: {
-      /** @description Already registered */
-      200: {
-        headers: {
-          [name: string]: unknown
-        }
-        content: {
-          'application/json': components['schemas']['RegistrationEnvelope']
-        }
-      }
-      /** @description Registered */
-      201: {
-        headers: {
-          [name: string]: unknown
-        }
-        content: {
-          'application/json': components['schemas']['RegistrationEnvelope']
-        }
-      }
-      401: components['responses']['Unauthenticated']
-      403: components['responses']['Forbidden']
-      404: components['responses']['NotFound']
-      /** @description `event-full` or `registration-closed` */
-      409: {
-        headers: {
-          [name: string]: unknown
-        }
-        content: {
-          'application/problem+json': components['schemas']['Problem']
-        }
-      }
-    }
-  }
-  cancelRegistration: {
-    parameters: {
-      query?: never
-      header?: never
-      path: {
-        event: components['parameters']['EventId']
-      }
-      cookie?: never
-    }
-    requestBody?: never
-    responses: {
-      /** @description Not registered (any more) */
-      204: {
-        headers: {
-          [name: string]: unknown
-        }
-        content?: never
-      }
-      401: components['responses']['Unauthenticated']
-      403: components['responses']['Forbidden']
-      404: components['responses']['NotFound']
-    }
-  }
-  listVenues: {
-    parameters: {
-      query?: {
-        city?: string
-      }
-      header?: never
-      path?: never
-      cookie?: never
-    }
-    requestBody?: never
-    responses: {
-      /** @description All venues, ordered by city and name */
-      200: {
-        headers: {
-          ETag: components['headers']['ETag']
-          [name: string]: unknown
-        }
-        content: {
-          'application/json': {
-            data: components['schemas']['Venue'][]
-          }
-        }
-      }
-      304: components['responses']['NotModified']
-    }
-  }
-  createVenue: {
-    parameters: {
-      query?: never
-      header?: never
-      path?: never
-      cookie?: never
-    }
-    requestBody: {
-      content: {
-        'application/json': {
-          name: string
-          address: string
-          city: string
-          capacity: number
-        }
-      }
-    }
-    responses: {
-      /** @description Created */
-      201: {
-        headers: {
-          Location?: string
-          [name: string]: unknown
-        }
-        content: {
-          'application/json': {
-            data: components['schemas']['Venue']
-          }
-        }
-      }
-      401: components['responses']['Unauthenticated']
-      422: components['responses']['ValidationFailed']
-    }
-  }
-  getVenue: {
-    parameters: {
-      query?: never
-      header?: never
-      path: {
-        venue: number
-      }
-      cookie?: never
-    }
-    requestBody?: never
-    responses: {
-      /** @description OK */
-      200: {
-        headers: {
-          [name: string]: unknown
-        }
-        content: {
-          'application/json': {
-            data: components['schemas']['Venue']
-          }
-        }
-      }
-      404: components['responses']['NotFound']
-    }
-  }
+    register: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    name: string;
+                    /** Format: email */
+                    email: string;
+                    password: string;
+                    /** @description Label for the token, e.g. "web" or "iPhone". */
+                    device_name?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Account created */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TokenResponse"];
+                };
+            };
+            422: components["responses"]["ValidationFailed"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["ServerError"];
+        };
+    };
+    login: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** Format: email */
+                    email: string;
+                    password: string;
+                    device_name?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Authenticated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TokenResponse"];
+                };
+            };
+            422: components["responses"]["ValidationFailed"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["ServerError"];
+        };
+    };
+    logout: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Token revoked */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthenticated"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["ServerError"];
+        };
+    };
+    getMe: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    ETag: components["headers"]["ETag"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["User"];
+                    };
+                };
+            };
+            304: components["responses"]["NotModified"];
+            401: components["responses"]["Unauthenticated"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["ServerError"];
+        };
+    };
+    listMyRegistrations: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    ETag: components["headers"]["ETag"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["Event"][];
+                    };
+                };
+            };
+            304: components["responses"]["NotModified"];
+            401: components["responses"]["Unauthenticated"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["ServerError"];
+        };
+    };
+    listEvents: {
+        parameters: {
+            query?: {
+                /** @description Matches title or description. */
+                q?: string;
+                city?: string;
+                /** @description Only events starting at or after this instant. */
+                from?: string;
+                /** @description Only events starting at or before this instant. */
+                to?: string;
+                venue_id?: number;
+                organizer_id?: number;
+                status?: components["schemas"]["EventStatus"];
+                /** @description Only published events that still have free spots (drafts and cancelled events are excluded). */
+                has_spots?: "true" | "false" | "1" | "0";
+                /** @description Sort key; prefix with `-` for descending. */
+                sort?: "starts_at" | "-starts_at" | "title" | "-title" | "created_at" | "-created_at";
+                page?: number;
+                per_page?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A page of events */
+            200: {
+                headers: {
+                    ETag: components["headers"]["ETag"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["Event"][];
+                        links: components["schemas"]["PaginationLinks"];
+                        meta: components["schemas"]["PaginationMeta"];
+                    };
+                };
+            };
+            304: components["responses"]["NotModified"];
+            422: components["responses"]["ValidationFailed"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["ServerError"];
+        };
+    };
+    createEvent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EventInput"];
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    /** @description URL of the new event. */
+                    Location?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["Event"];
+                    };
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            422: components["responses"]["ValidationFailed"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["ServerError"];
+        };
+    };
+    getEvent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                event: components["parameters"]["EventId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    ETag: components["headers"]["ETag"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["Event"];
+                    };
+                };
+            };
+            304: components["responses"]["NotModified"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["ServerError"];
+        };
+    };
+    deleteEvent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                event: components["parameters"]["EventId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["ServerError"];
+        };
+    };
+    updateEvent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                event: components["parameters"]["EventId"];
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EventPatch"];
+            };
+        };
+        responses: {
+            /** @description Updated */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["Event"];
+                    };
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            409: components["responses"]["Conflict"];
+            422: components["responses"]["ValidationFailed"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["ServerError"];
+        };
+    };
+    listAttendees: {
+        parameters: {
+            query?: {
+                page?: number;
+                per_page?: number;
+            };
+            header?: never;
+            path: {
+                event: components["parameters"]["EventId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A page of registrations */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["Registration"][];
+                        links: components["schemas"]["PaginationLinks"];
+                        meta: components["schemas"]["PaginationMeta"];
+                    };
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            422: components["responses"]["ValidationFailed"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["ServerError"];
+        };
+    };
+    registerForEvent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                event: components["parameters"]["EventId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Already registered */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RegistrationEnvelope"];
+                };
+            };
+            /** @description Registered */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RegistrationEnvelope"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            /** @description `event-full` or `registration-closed` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["ServerError"];
+        };
+    };
+    cancelRegistration: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                event: components["parameters"]["EventId"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Not registered (any more) */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["ServerError"];
+        };
+    };
+    listVenues: {
+        parameters: {
+            query?: {
+                city?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description All venues, ordered by city and name */
+            200: {
+                headers: {
+                    ETag: components["headers"]["ETag"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["Venue"][];
+                    };
+                };
+            };
+            304: components["responses"]["NotModified"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["ServerError"];
+        };
+    };
+    createVenue: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    name: string;
+                    address: string;
+                    city: string;
+                    capacity: number;
+                };
+            };
+        };
+        responses: {
+            /** @description Created */
+            201: {
+                headers: {
+                    Location?: string;
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["Venue"];
+                    };
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            422: components["responses"]["ValidationFailed"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["ServerError"];
+        };
+    };
+    getVenue: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                venue: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    ETag: components["headers"]["ETag"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        data: components["schemas"]["Venue"];
+                    };
+                };
+            };
+            304: components["responses"]["NotModified"];
+            404: components["responses"]["NotFound"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["ServerError"];
+        };
+    };
 }

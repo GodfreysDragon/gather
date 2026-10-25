@@ -1,4 +1,4 @@
-import type { Attendee, EventFilters, EventInput, EventItem, Page, Venue } from './types'
+import type { Attendee, EventFilters, EventInput, EventItem, MyEvents, Page, Venue } from './types'
 
 /**
  * Everything the UI needs from the backend, independent of transport. There are
@@ -19,10 +19,11 @@ export interface EventsRepository {
   cancelRegistration(eventId: number): Promise<EventItem>
   listAttendees(eventId: number): Promise<Attendee[]>
 
-  /** Upcoming events the viewer is registered for. */
-  myRegistrations(): Promise<EventItem[]>
-  /** Events the viewer organizes, drafts included. */
-  myOrganizedEvents(viewerId: number): Promise<EventItem[]>
+  /**
+   * The viewer's dashboard: upcoming events they're going to, and the events they
+   * organize (drafts included). Two REST calls, one GraphQL query.
+   */
+  myEvents(viewerId: number): Promise<MyEvents>
 
   listVenues(): Promise<Venue[]>
 }
