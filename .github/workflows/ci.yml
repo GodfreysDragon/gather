@@ -53,7 +53,6 @@ jobs:
       - name: Generated API types match openapi.yaml
         run: |
           npm run gen:api
-          npx prettier --write src/api/schema.d.ts > /dev/null 2>&1 || true
           git diff --exit-code src/api/schema.d.ts
 
   e2e:
