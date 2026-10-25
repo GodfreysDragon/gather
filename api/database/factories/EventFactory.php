@@ -29,7 +29,8 @@ class EventFactory extends Factory
             'description' => fake()->paragraph(),
             'starts_at' => $startsAt,
             'ends_at' => (clone $startsAt)->modify('+3 hours'),
-            'capacity' => fake()->numberBetween(10, 100),
+            // Never more than the venue holds, like the API's own FitsVenue rule.
+            'capacity' => fn (array $attributes) => min(fake()->numberBetween(10, 100), Venue::findOrFail($attributes['venue_id'])->capacity),
             'status' => EventStatus::Published,
         ];
     }

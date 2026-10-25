@@ -1,10 +1,10 @@
 <?php
 
 declare(strict_types=1);
+use App\GraphQL\AuthorizationErrorHandler;
 use GraphQL\Error\DebugFlag;
 use GraphQL\Validator\Rules\DisableIntrospection;
 use Nuwave\Lighthouse\Execution\AuthenticationErrorHandler;
-use Nuwave\Lighthouse\Execution\AuthorizationErrorHandler;
 use Nuwave\Lighthouse\Execution\ReportingErrorHandler;
 use Nuwave\Lighthouse\Execution\ValidationErrorHandler;
 use Nuwave\Lighthouse\Http\Middleware\AcceptJson;

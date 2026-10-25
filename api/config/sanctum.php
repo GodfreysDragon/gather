@@ -3,7 +3,6 @@
 use Illuminate\Cookie\Middleware\EncryptCookies;
 use Illuminate\Foundation\Http\Middleware\ValidateCsrfToken;
 use Laravel\Sanctum\Http\Middleware\AuthenticateSession;
-use Laravel\Sanctum\Sanctum;
 
 return [
 
@@ -18,12 +17,9 @@ return [
     |
     */
 
-    'stateful' => explode(',', env('SANCTUM_STATEFUL_DOMAINS', sprintf(
-        '%s%s',
-        'localhost,localhost:3000,127.0.0.1,127.0.0.1:8000,::1',
-        Sanctum::currentApplicationUrlWithPort(),
-        // Sanctum::currentRequestHost(),
-    ))),
+    // Gather authenticates with bearer tokens only, so no origin gets cookie-based
+    // (stateful) authentication.
+    'stateful' => [],
 
     /*
     |--------------------------------------------------------------------------
@@ -37,7 +33,8 @@ return [
     |
     */
 
-    'guard' => ['web'],
+    // No session guard: only the bearer token on the request is checked.
+    'guard' => [],
 
     /*
     |--------------------------------------------------------------------------
