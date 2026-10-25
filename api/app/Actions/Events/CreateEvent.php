@@ -6,6 +6,7 @@ use App\Enums\EventStatus;
 use App\Models\Event;
 use App\Models\User;
 use App\Rules\FitsVenue;
+use App\Rules\Iso8601DateTime;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
@@ -40,8 +41,8 @@ class CreateEvent
             'venue_id' => ['required', 'integer', 'exists:venues,id'],
             'title' => ['required', 'string', 'min:3', 'max:120'],
             'description' => ['required', 'string', 'max:5000'],
-            'starts_at' => ['required', 'date', 'after:now'],
-            'ends_at' => ['required', 'date', 'after:starts_at'],
+            'starts_at' => ['required', new Iso8601DateTime, 'date', 'after:now'],
+            'ends_at' => ['required', new Iso8601DateTime, 'date', 'after:starts_at'],
             'capacity' => ['required', 'integer', 'min:1', new FitsVenue($input['venue_id'] ?? null)],
             'status' => ['sometimes', Rule::enum(EventStatus::class)->only([EventStatus::Draft, EventStatus::Published])],
         ];

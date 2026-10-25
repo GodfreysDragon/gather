@@ -18,10 +18,15 @@ class AttendeeController extends Controller
     {
         Gate::authorize('viewAttendees', $event);
 
+        $request->validate([
+            'page' => ['sometimes', 'integer', 'min:1'],
+            'per_page' => ['sometimes', 'integer', 'min:1', 'max:100'],
+        ]);
+
         $registrations = $event->registrations()
             ->with('user')
             ->oldest()
-            ->paginate(min(max($request->integer('per_page', 25), 1), 100))
+            ->paginate($request->integer('per_page', 25))
             ->withQueryString();
 
         return RegistrationResource::collection($registrations);

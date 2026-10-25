@@ -20,6 +20,10 @@ info:
     `If-None-Match` to get `304 Not Modified`.
 
     **Rate limits.** 120 requests/minute per user (or IP); 10/minute for the auth endpoints.
+    Any operation can return `429` (with `Retry-After`) or `500`; both are problem documents too.
+
+    **Dates.** Instants are ISO 8601 with an explicit offset on input (`2026-11-01T20:00:00+02:00`
+    or `…Z`) and always UTC (`…Z`) on output.
 
     A GraphQL API over the same domain is served at `/graphql` (schema: `api/graphql/schema.graphql`).
 servers:
@@ -60,6 +64,7 @@ paths:
               schema: { $ref: '#/components/schemas/TokenResponse' }
         '422': { $ref: '#/components/responses/ValidationFailed' }
         '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/ServerError' }
 
   /auth/login:
     post:
@@ -86,6 +91,7 @@ paths:
               schema: { $ref: '#/components/schemas/TokenResponse' }
         '422': { $ref: '#/components/responses/ValidationFailed' }
         '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/ServerError' }
 
   /auth/logout:
     post:
@@ -95,6 +101,8 @@ paths:
       responses:
         '204': { description: Token revoked }
         '401': { $ref: '#/components/responses/Unauthenticated' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/ServerError' }
 
   /me:
     get:
@@ -113,7 +121,10 @@ paths:
                 required: [data]
                 properties:
                   data: { $ref: '#/components/schemas/User' }
+        '304': { $ref: '#/components/responses/NotModified' }
         '401': { $ref: '#/components/responses/Unauthenticated' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/ServerError' }
 
   /me/registrations:
     get:
@@ -123,6 +134,8 @@ paths:
       responses:
         '200':
           description: OK
+          headers:
+            ETag: { $ref: '#/components/headers/ETag' }
           content:
             application/json:
               schema:
@@ -132,7 +145,10 @@ paths:
                   data:
                     type: array
                     items: { $ref: '#/components/schemas/Event' }
+        '304': { $ref: '#/components/responses/NotModified' }
         '401': { $ref: '#/components/responses/Unauthenticated' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/ServerError' }
 
   /events:
     get:
@@ -179,6 +195,8 @@ paths:
                   meta: { $ref: '#/components/schemas/PaginationMeta' }
         '304': { $ref: '#/components/responses/NotModified' }
         '422': { $ref: '#/components/responses/ValidationFailed' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/ServerError' }
     post:
       tags: [Events]
       operationId: createEvent
@@ -204,6 +222,8 @@ paths:
                   data: { $ref: '#/components/schemas/Event' }
         '401': { $ref: '#/components/responses/Unauthenticated' }
         '422': { $ref: '#/components/responses/ValidationFailed' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/ServerError' }
 
   /events/{event}:
     parameters:
@@ -228,11 +248,16 @@ paths:
         '304': { $ref: '#/components/responses/NotModified' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/ServerError' }
     patch:
       tags: [Events]
       operationId: updateEvent
       summary: Update an event (organizer only)
-      description: Partial update. Omitted fields keep their current value. Set `status` to `cancelled` to cancel.
+      description: |
+        Partial update. Omitted fields keep their current value. Set `status` to `cancelled` to cancel.
+        An event people have registered for can't go back to `draft` (`409 event-has-registrations`).
+        Someone else's draft is `404`, not `403`, so its existence isn't revealed.
       requestBody:
         required: true
         content:
@@ -253,6 +278,8 @@ paths:
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
         '422': { $ref: '#/components/responses/ValidationFailed' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/ServerError' }
     delete:
       tags: [Events]
       operationId: deleteEvent
@@ -264,6 +291,8 @@ paths:
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
         '409': { $ref: '#/components/responses/Conflict' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/ServerError' }
 
   /events/{event}/attendees:
     parameters:
@@ -292,6 +321,9 @@ paths:
         '401': { $ref: '#/components/responses/Unauthenticated' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/ServerError' }
 
   /events/{event}/registration:
     parameters:
@@ -322,6 +354,8 @@ paths:
           content:
             application/problem+json:
               schema: { $ref: '#/components/schemas/Problem' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/ServerError' }
     delete:
       tags: [Registrations]
       operationId: cancelRegistration
@@ -332,6 +366,8 @@ paths:
         '401': { $ref: '#/components/responses/Unauthenticated' }
         '403': { $ref: '#/components/responses/Forbidden' }
         '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/ServerError' }
 
   /venues:
     get:
@@ -356,6 +392,8 @@ paths:
                     type: array
                     items: { $ref: '#/components/schemas/Venue' }
         '304': { $ref: '#/components/responses/NotModified' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/ServerError' }
     post:
       tags: [Venues]
       operationId: createVenue
@@ -371,7 +409,7 @@ paths:
                 name: { type: string, maxLength: 120 }
                 address: { type: string, maxLength: 255 }
                 city: { type: string, maxLength: 100 }
-                capacity: { type: integer, minimum: 1 }
+                capacity: { type: integer, minimum: 1, maximum: 100000 }
       responses:
         '201':
           description: Created
@@ -387,6 +425,8 @@ paths:
                   data: { $ref: '#/components/schemas/Venue' }
         '401': { $ref: '#/components/responses/Unauthenticated' }
         '422': { $ref: '#/components/responses/ValidationFailed' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/ServerError' }
 
   /venues/{venue}:
     parameters:
@@ -399,6 +439,8 @@ paths:
       responses:
         '200':
           description: OK
+          headers:
+            ETag: { $ref: '#/components/headers/ETag' }
           content:
             application/json:
               schema:
@@ -406,7 +448,10 @@ paths:
                 required: [data]
                 properties:
                   data: { $ref: '#/components/schemas/Venue' }
+        '304': { $ref: '#/components/responses/NotModified' }
         '404': { $ref: '#/components/responses/NotFound' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/ServerError' }
 
 security:
   - bearerAuth: []
@@ -458,6 +503,11 @@ components:
       content:
         application/problem+json:
           schema: { $ref: '#/components/schemas/ValidationProblem' }
+    ServerError:
+      description: Unexpected server error
+      content:
+        application/problem+json:
+          schema: { $ref: '#/components/schemas/Problem' }
     TooManyRequests:
       description: Rate limit exceeded; see `Retry-After`.
       headers:
@@ -578,7 +628,9 @@ components:
     EventPatch:
       type: object
       minProperties: 1
-      description: Any subset of the event fields. `capacity` may not drop below the current registration count (`409 capacity-conflict`).
+      description: |
+        Any non-empty subset of the event fields. `capacity` may not drop below the current registration
+        count (`409 capacity-conflict`), and the event's capacity must still fit the venue after a `venue_id` change.
       properties:
         venue_id: { type: integer }
         title: { type: string, minLength: 3, maxLength: 120 }

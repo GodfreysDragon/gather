@@ -174,4 +174,15 @@ class EventListingTest extends TestCase
 
         return count(DB::getQueryLog());
     }
+
+    public function test_search_treats_wildcard_characters_literally(): void
+    {
+        $match = Event::factory()->create(['title' => 'Save 50% on tickets']);
+        Event::factory()->create(['title' => 'Save 500 euros']);
+
+        $this->getJson('/api/v1/events?'.http_build_query(['q' => '50%']))
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.id', $match->id);
+    }
 }

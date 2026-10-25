@@ -161,4 +161,74 @@ class EventManagementTest extends TestCase
             ->assertCreated()
             ->assertJsonPath('data.city', 'Austin');
     }
+
+    public function test_times_must_be_iso_8601_with_an_offset(): void
+    {
+        Sanctum::actingAs(User::factory()->create());
+        $venue = Venue::factory()->create(['capacity' => 100]);
+        $date = now()->addMonth()->format('Y-m-d');
+
+        $this->postJson('/api/v1/events', $this->payload($venue, [
+            'starts_at' => 'next friday',
+            'ends_at' => "{$date}T22:00:00",
+        ]))
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['starts_at', 'ends_at']);
+    }
+
+    public function test_an_empty_update_is_rejected(): void
+    {
+        $event = Event::factory()->create();
+        Sanctum::actingAs($event->organizer);
+
+        $this->patchJson("/api/v1/events/{$event->id}", [])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('body');
+    }
+
+    public function test_moving_to_a_smaller_venue_must_still_fit_the_capacity(): void
+    {
+        $event = Event::factory()->for(Venue::factory()->create(['capacity' => 200]))->capacity(80)->create();
+        $small = Venue::factory()->create(['capacity' => 50]);
+        Sanctum::actingAs($event->organizer);
+
+        $this->patchJson("/api/v1/events/{$event->id}", ['venue_id' => $small->id])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('venue_id');
+
+        $this->patchJson("/api/v1/events/{$event->id}", ['venue_id' => $small->id, 'capacity' => 50])
+            ->assertOk()
+            ->assertJsonPath('data.venue.id', $small->id);
+    }
+
+    public function test_an_event_with_registrations_cannot_go_back_to_draft(): void
+    {
+        $event = Event::factory()->create();
+        $event->attendees()->attach(User::factory()->create());
+        Sanctum::actingAs($event->organizer);
+
+        $this->patchJson("/api/v1/events/{$event->id}", ['status' => 'draft'])
+            ->assertConflict()
+            ->assertJsonPath('type', url('/problems/event-has-registrations'));
+
+        $this->assertSame('published', $event->fresh()->status->value);
+    }
+
+    public function test_writes_to_someone_elses_draft_return_404_rather_than_403(): void
+    {
+        $draft = Event::factory()->draft()->create();
+        Sanctum::actingAs(User::factory()->create());
+
+        $this->patchJson("/api/v1/events/{$draft->id}", ['title' => 'Hijacked'])->assertNotFound();
+        $this->deleteJson("/api/v1/events/{$draft->id}")->assertNotFound();
+        $this->getJson("/api/v1/events/{$draft->id}/attendees")->assertNotFound();
+    }
+
+    public function test_put_is_not_an_alias_for_patch(): void
+    {
+        $event = Event::factory()->create();
+        Sanctum::actingAs($event->organizer);
+
+        $this->putJson("/api/v1/events/{$event->id}", ['title' => 'Renamed'])->assertMethodNotAllowed();
+    }
 }

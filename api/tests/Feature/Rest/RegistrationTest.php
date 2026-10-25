@@ -123,4 +123,14 @@ class RegistrationTest extends TestCase
             ->assertJsonPath('data.*.id', [$sooner->id, $later->id])
             ->assertJsonPath('data.0.viewer.is_registered', true);
     }
+
+    public function test_attendee_page_size_is_validated(): void
+    {
+        $event = Event::factory()->create();
+        Sanctum::actingAs($event->organizer);
+
+        $this->getJson("/api/v1/events/{$event->id}/attendees?per_page=500")
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('per_page');
+    }
 }

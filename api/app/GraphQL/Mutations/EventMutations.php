@@ -43,7 +43,7 @@ class EventMutations
      */
     public function update(mixed $root, array $args, GraphQLContext $context): Event
     {
-        $event = $this->findEvent($args['id']);
+        $event = $this->findVisibleEvent($args['id'], $context);
         Gate::forUser($context->user())->authorize('update', $event);
 
         return $this->withGraphQLErrorKeys(fn () => $this->updateEvent
@@ -56,7 +56,7 @@ class EventMutations
      */
     public function delete(mixed $root, array $args, GraphQLContext $context): string
     {
-        $event = $this->findEvent($args['id']);
+        $event = $this->findVisibleEvent($args['id'], $context);
         Gate::forUser($context->user())->authorize('delete', $event);
 
         $this->deleteEvent->handle($event);
@@ -64,9 +64,18 @@ class EventMutations
         return (string) $event->id;
     }
 
-    private function findEvent(string $id): Event
+    /**
+     * Someone else's draft is "not found", exactly as in the `event` query and the REST API.
+     */
+    private function findVisibleEvent(string $id, GraphQLContext $context): Event
     {
-        return Event::find($id) ?? throw new ResourceNotFoundException('Event');
+        $event = Event::find($id);
+
+        if ($event === null || Gate::forUser($context->user())->denies('view', $event)) {
+            throw new ResourceNotFoundException('Event');
+        }
+
+        return $event;
     }
 
     /**

@@ -98,4 +98,17 @@ class AuthTest extends TestCase
             ->assertHeader('Retry-After')
             ->assertJsonPath('status', 429);
     }
+
+    public function test_email_addresses_are_case_insensitive(): void
+    {
+        $this->postJson('/api/v1/auth/register', [
+            'name' => 'Ada', 'email' => 'Ada@Example.com', 'password' => 'correct-horse',
+        ])->assertCreated()->assertJsonPath('user.email', 'ada@example.com');
+
+        $this->postJson('/api/v1/auth/register', [
+            'name' => 'Ada again', 'email' => 'ada@example.com', 'password' => 'correct-horse',
+        ])->assertUnprocessable()->assertJsonValidationErrors('email');
+
+        $this->postJson('/api/v1/auth/login', ['email' => 'ADA@example.com', 'password' => 'correct-horse'])->assertOk();
+    }
 }
