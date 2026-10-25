@@ -119,8 +119,12 @@ class Event extends Model
     {
         $query
             ->when($filters['q'] ?? null, function (Builder $q, string $term) {
-                $like = '%'.addcslashes($term, '%_').'%';
-                $q->where(fn (Builder $w) => $w->where('title', 'like', $like)->orWhere('description', 'like', $like));
+                // Treat % and _ as literal characters. SQLite has no default escape character,
+                // so one is spelled out; "!" needs no quoting in any of the supported databases.
+                $like = '%'.str_replace(['!', '%', '_'], ['!!', '!%', '!_'], $term).'%';
+                $q->where(fn (Builder $w) => $w
+                    ->whereRaw("title like ? escape '!'", [$like])
+                    ->orWhereRaw("description like ? escape '!'", [$like]));
             })
             ->when($filters['city'] ?? null, fn (Builder $q, string $city) => $q->whereRelation('venue', 'city', $city))
             ->when($filters['from'] ?? null, fn (Builder $q, string $from) => $q->where('starts_at', '>=', CarbonImmutable::parse($from)->utc()))

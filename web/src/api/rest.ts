@@ -1,7 +1,8 @@
 import createClient, { type Middleware } from 'openapi-fetch'
 import type { paths } from './schema'
 import { recordApiCall } from './apiLog'
-import { ApiError, type ProblemDocument } from './errors'
+import { ApiError, networkError, type ProblemDocument } from './errors'
+import { notifyUnauthenticated } from './session'
 import { getToken } from './token'
 
 export const API_ORIGIN = import.meta.env.VITE_API_URL.replace(/\/$/, '')
@@ -16,20 +17,50 @@ const auth: Middleware = {
     startedAt.set(request, performance.now())
     return request
   },
+  onResponse({ request, response }) {
+    // A token we sent was rejected: it expired or was revoked elsewhere. Logging out
+    // with a dead token is expected to 401 and is handled by the logout action itself.
+    if (
+      response.status === 401 &&
+      request.headers.has('Authorization') &&
+      !new URL(request.url).pathname.endsWith('/auth/logout')
+    ) {
+      notifyUnauthenticated()
+    }
+    return response
+  },
+}
+
+function label(request: Request): string {
+  const url = new URL(request.url)
+  return `${request.method} ${url.pathname.replace('/api/v1', '')}${url.search}`
+}
+
+function elapsed(request: Request): number {
+  return Math.round(performance.now() - (startedAt.get(request) ?? performance.now()))
 }
 
 const logging: Middleware = {
   async onResponse({ request, response }) {
-    const url = new URL(request.url)
     recordApiCall({
       transport: 'REST',
-      label: `${request.method} ${url.pathname.replace('/api/v1', '')}${url.search}`,
+      label: label(request),
       status: response.status,
-      durationMs: Math.round(performance.now() - (startedAt.get(request) ?? performance.now())),
+      durationMs: elapsed(request),
       bytes:
         Number(response.headers.get('Content-Length')) || (await response.clone().text()).length,
     })
     return response
+  },
+  onError({ request }) {
+    // The request never got a response (offline, CORS, API down); `unwrap` turns it into an ApiError.
+    recordApiCall({
+      transport: 'REST',
+      label: label(request),
+      status: 'error',
+      durationMs: elapsed(request),
+      bytes: 0,
+    })
   },
 }
 
@@ -51,7 +82,7 @@ export async function unwrap<T>(
   try {
     result = await call
   } catch {
-    throw new ApiError('network_error', `Couldn't reach the API at ${API_ORIGIN}. Is it running?`)
+    throw networkError(API_ORIGIN)
   }
 
   const { data, error, response } = result
@@ -60,7 +91,7 @@ export async function unwrap<T>(
     const problem = error as Partial<ProblemDocument> | undefined
     throw ApiError.fromProblem({
       type: problem?.type ?? 'about:blank',
-      title: problem?.title ?? response.statusText,
+      title: problem?.title ?? (response.statusText || `HTTP ${response.status}`),
       status: problem?.status ?? response.status,
       detail: problem?.detail,
       errors: problem?.errors,

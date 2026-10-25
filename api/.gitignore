@@ -25,3 +25,11 @@ _ide_helper.php
 Homestead.json
 Homestead.yaml
 Thumbs.db
+
+# AI-assistant tooling (Laravel Boost etc.) is per-developer, not part of the project
+/CLAUDE.md
+/AGENTS.md
+/.claude/
+/.mcp.json
+/boost.json
+/.ai/

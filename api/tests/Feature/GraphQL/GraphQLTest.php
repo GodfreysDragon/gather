@@ -213,4 +213,26 @@ class GraphQLTest extends TestCase
 
         $this->assertStringStartsWith('Max query complexity should be 1000', $message);
     }
+
+    public function test_mutations_on_someone_elses_draft_report_not_found(): void
+    {
+        $draft = Event::factory()->draft()->create();
+        Sanctum::actingAs(User::factory()->create());
+
+        $this->graphQL(/** @lang GraphQL */ 'mutation ($id: ID!) { updateEvent(id: $id, input: { title: "Hijacked" }) { id } }', ['id' => $draft->id])
+            ->assertJsonPath('errors.0.extensions.code', 'NOT_FOUND');
+
+        $this->graphQL(/** @lang GraphQL */ 'mutation ($id: ID!) { deleteEvent(id: $id) }', ['id' => $draft->id])
+            ->assertJsonPath('errors.0.extensions.code', 'NOT_FOUND');
+    }
+
+    public function test_an_event_with_registrations_cannot_go_back_to_draft(): void
+    {
+        $event = Event::factory()->create();
+        $event->attendees()->attach(User::factory()->create());
+        Sanctum::actingAs($event->organizer);
+
+        $this->graphQL(/** @lang GraphQL */ 'mutation ($id: ID!) { updateEvent(id: $id, input: { status: DRAFT }) { status } }', ['id' => $event->id])
+            ->assertJsonPath('errors.0.extensions.code', 'EVENT_HAS_REGISTRATIONS');
+    }
 }

@@ -9,6 +9,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rules\Password;
 use Illuminate\Validation\ValidationException;
 
@@ -20,6 +21,8 @@ class AuthController extends Controller
 {
     public function register(Request $request): JsonResponse
     {
+        $this->normaliseEmail($request);
+
         $data = $request->validate([
             'name' => ['required', 'string', 'max:100'],
             'email' => ['required', 'string', 'email', 'max:255', 'unique:users,email'],
@@ -34,6 +37,8 @@ class AuthController extends Controller
 
     public function login(Request $request): JsonResponse
     {
+        $this->normaliseEmail($request);
+
         $data = $request->validate([
             'email' => ['required', 'string', 'email'],
             'password' => ['required', 'string'],
@@ -54,6 +59,17 @@ class AuthController extends Controller
         $request->user()->currentAccessToken()->delete();
 
         return response()->noContent();
+    }
+
+    /**
+     * E-mail addresses are case-insensitive in practice, but SQLite compares strings
+     * case-sensitively, so "Demo@…" would otherwise be a second account.
+     */
+    private function normaliseEmail(Request $request): void
+    {
+        if (is_string($request->input('email'))) {
+            $request->merge(['email' => Str::lower(trim($request->input('email')))]);
+        }
     }
 
     private function tokenResponse(Request $request, User $user, string $deviceName, int $status): JsonResponse

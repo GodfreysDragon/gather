@@ -1,19 +1,31 @@
 /**
- * End-to-end smoke test: drives the real SPA against the real API in headless Edge
- * (or Chrome), through both transports.
+ * End-to-end smoke test: drives the real SPA against the real API in headless
+ * Chromium, through both transports.
  *
  * Needs the API running on a freshly seeded database and the SPA dev server:
  *   api/  php artisan migrate:fresh --seed && php artisan serve
  *   web/  npm run dev
  *   web/  E2E_URL=http://localhost:5173 npm run test:e2e
+ *
+ * Environment:
+ *   E2E_URL      SPA origin (default http://localhost:5173)
+ *   E2E_BROWSER  Use an installed browser channel instead of Playwright's bundled
+ *                Chromium, e.g. msedge or chrome. Without it, install the bundled
+ *                one once with `npx playwright-core install chromium`.
+ *   E2E_DARK=1   Run in dark mode (prefers-color-scheme: dark); screenshots get a
+ *                `-dark` suffix so both themes can be kept side by side. Passing
+ *                `--dark` does the same: `npm run test:e2e -- --dark`.
  */
 import { mkdirSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
 import { chromium } from 'playwright-core'
 
 const BASE = process.env.E2E_URL ?? 'http://localhost:5173'
-const CHANNEL = process.env.E2E_BROWSER ?? 'msedge'
+const CHANNEL = process.env.E2E_BROWSER || undefined
+const DARK = process.env.E2E_DARK === '1' || process.argv.includes('--dark')
 const SHOTS = new URL('./screenshots/', import.meta.url)
 mkdirSync(SHOTS, { recursive: true })
+const shotPath = (name) => fileURLToPath(new URL(`${name}${DARK ? '-dark' : ''}.png`, SHOTS))
 
 let step = 0
 async function check(name, fn) {
@@ -23,7 +35,7 @@ async function check(name, fn) {
     console.log(`  ✓ ${step}. ${name}`)
   } catch (error) {
     console.error(`  ✗ ${step}. ${name}\n    ${error.message.split('\n')[0]}`)
-    await page.screenshot({ path: new URL(`failure-${step}.png`, SHOTS).pathname.replace(/^\/(\w:)/, '$1') })
+    await page.screenshot({ path: shotPath(`failure-${step}`) })
     await browser.close()
     process.exit(1)
   }
@@ -33,11 +45,13 @@ function assert(condition, message) {
   if (!condition) throw new Error(message)
 }
 
-const shot = (name) =>
-  page.screenshot({ path: new URL(`${name}.png`, SHOTS).pathname.replace(/^\/(\w:)/, '$1'), fullPage: true })
+const shot = (name) => page.screenshot({ path: shotPath(name), fullPage: true })
 
 const browser = await chromium.launch({ channel: CHANNEL, headless: true })
-const context = await browser.newContext({ viewport: { width: 1280, height: 900 } })
+const context = await browser.newContext({
+  viewport: { width: 1280, height: 900 },
+  colorScheme: DARK ? 'dark' : 'light',
+})
 const page = await context.newPage()
 const consoleErrors = []
 page.on('console', (msg) => msg.type() === 'error' && consoleErrors.push(msg.text()))
@@ -46,18 +60,20 @@ page.on('dialog', (dialog) => dialog.accept())
 async function cardTitles() {
   await page.locator('[data-testid="event-card"]').first().waitFor()
   await page.waitForFunction(() => !document.querySelector('[aria-busy="true"]'))
-  return page.locator('[data-testid="event-card"] h3').allInnerTexts()
+  return page.locator('[data-testid="event-card-title"]').allInnerTexts()
 }
 
 async function useTransport(name) {
   await page.click(`[data-testid="transport-${name}"]`)
   await page.waitForFunction(
-    (n) => document.querySelector(`[data-testid="transport-${n}"]`)?.getAttribute('aria-checked') === 'true',
+    (n) => document.querySelector(`[data-testid="transport-${n}"]`)?.checked === true,
     name,
   )
 }
 
-console.log(`Gather e2e against ${BASE} (${CHANNEL})`)
+console.log(
+  `Gather e2e against ${BASE} (${CHANNEL ?? 'bundled chromium'}, ${DARK ? 'dark' : 'light'} mode)`,
+)
 
 let restTitles = []
 

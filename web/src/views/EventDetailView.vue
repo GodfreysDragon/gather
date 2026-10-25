@@ -2,11 +2,11 @@
 import { storeToRefs } from 'pinia'
 import { computed, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ApiError } from '@/api/errors'
+import { toApiError, type ApiError } from '@/api/errors'
 import ErrorAlert from '@/components/ErrorAlert.vue'
 import EventBadges from '@/components/EventBadges.vue'
 import { useResource } from '@/composables/useResource'
-import type { Attendee, EventItem } from '@/domain/types'
+import type { EventItem } from '@/domain/types'
 import { useAuthStore } from '@/stores/auth'
 import { useTransportStore } from '@/stores/transport'
 import { formatEventTime } from '@/utils/format'
@@ -23,7 +23,7 @@ const {
   error,
   loading,
   reload,
-} = useResource((repo) => repo.getEvent(props.id), [() => props.id])
+} = useResource((repo) => repo.getEvent(props.id), [() => props.id, () => auth.user?.id])
 
 /** Local copy so mutations can show their result without refetching. */
 const event = ref<EventItem | null>(null)
@@ -44,7 +44,7 @@ async function run(action: () => Promise<EventItem | void>): Promise<void> {
     const updated = await action()
     if (updated) event.value = updated
   } catch (e) {
-    actionError.value = e instanceof ApiError ? e : new ApiError('unknown', String(e))
+    actionError.value = toApiError(e)
   } finally {
     busy.value = false
   }
@@ -75,14 +75,16 @@ const deleteEvent = () => {
   }
 }
 
-// Attendees are only loaded for the organizer.
-const attendees = ref<Attendee[] | null>(null)
-watch(
-  () =>
-    [event.value?.viewer.isOrganizer, event.value?.registrationCount, repository.value] as const,
-  async ([isOrganizer]) => {
-    attendees.value = isOrganizer ? await repository.value.listAttendees(props.id) : null
-  },
+// Attendees are only loaded for the organizer, and refreshed when the count changes.
+const {
+  data: attendees,
+  error: attendeesError,
+  reload: reloadAttendees,
+} = useResource(
+  (repo) =>
+    event.value?.viewer.isOrganizer ? repo.listAttendees(props.id) : Promise.resolve(null),
+  [() => props.id, () => event.value?.viewer.isOrganizer, () => event.value?.registrationCount],
+  { keepPreviousData: true },
 )
 </script>
 
@@ -90,7 +92,7 @@ watch(
   <div>
     <RouterLink
       :to="{ name: 'events' }"
-      class="text-sm text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
+      class="text-sm text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
     >
       ← All events
     </RouterLink>
@@ -99,7 +101,7 @@ watch(
 
     <div v-else-if="!loading && loaded === null" class="py-20 text-center">
       <h1 class="text-xl font-semibold">Event not found</h1>
-      <p class="mt-1 text-slate-500">
+      <p class="mt-1 text-slate-500 dark:text-slate-400">
         It may have been deleted, or it's a draft you don't organize.
       </p>
     </div>
@@ -116,11 +118,11 @@ watch(
 
         <dl class="mt-6 grid gap-4 text-sm sm:grid-cols-2">
           <div>
-            <dt class="font-medium text-slate-500">When</dt>
+            <dt class="font-medium text-slate-500 dark:text-slate-400">When</dt>
             <dd>{{ formatEventTime(event.startsAt, event.endsAt) }}</dd>
           </div>
           <div>
-            <dt class="font-medium text-slate-500">Where</dt>
+            <dt class="font-medium text-slate-500 dark:text-slate-400">Where</dt>
             <dd>{{ event.venue.name }}, {{ event.venue.address }}, {{ event.venue.city }}</dd>
           </div>
         </dl>
@@ -133,7 +135,7 @@ watch(
       <aside class="space-y-4">
         <div class="card p-5">
           <p class="text-3xl font-bold" data-testid="detail-spots-left">{{ event.spotsLeft }}</p>
-          <p class="text-sm text-slate-500">
+          <p class="text-sm text-slate-500 dark:text-slate-400">
             of {{ event.capacity }} spots left · {{ event.registrationCount }} going
           </p>
 
@@ -164,10 +166,12 @@ watch(
             >
               Cancel my registration
             </button>
-            <p v-if="event.status === 'cancelled'" class="text-sm text-red-600">
+            <p v-if="event.status === 'cancelled'" class="text-sm text-red-600 dark:text-red-400">
               This event was cancelled.
             </p>
-            <p v-else-if="isPast" class="text-sm text-slate-500">This event has already started.</p>
+            <p v-else-if="isPast" class="text-sm text-slate-500 dark:text-slate-400">
+              This event has already started.
+            </p>
           </div>
 
           <ErrorAlert v-if="actionError" class="mt-4" :error="actionError" />
@@ -200,8 +204,15 @@ watch(
             Delete event
           </button>
 
-          <div v-if="attendees" class="pt-3">
-            <h3 class="mb-2 text-sm font-medium text-slate-500">
+          <ErrorAlert
+            v-if="attendeesError"
+            class="mt-3"
+            :error="attendeesError"
+            retryable
+            @retry="reloadAttendees"
+          />
+          <div v-else-if="attendees" class="pt-3">
+            <h3 class="mb-2 text-sm font-medium text-slate-500 dark:text-slate-400">
               Attendees ({{ attendees.length }})
             </h3>
             <ul class="max-h-64 space-y-1 overflow-y-auto text-sm">
@@ -211,11 +222,13 @@ watch(
                 class="flex justify-between gap-2"
               >
                 <span class="truncate">{{ attendee.name }}</span>
-                <span class="shrink-0 text-xs text-slate-500">{{
+                <span class="shrink-0 text-xs text-slate-500 dark:text-slate-400">{{
                   attendee.registeredAt.toLocaleDateString()
                 }}</span>
               </li>
-              <li v-if="attendees.length === 0" class="text-slate-500">Nobody yet.</li>
+              <li v-if="attendees.length === 0" class="text-slate-500 dark:text-slate-400">
+                Nobody yet.
+              </li>
             </ul>
           </div>
         </div>

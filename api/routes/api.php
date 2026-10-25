@@ -28,7 +28,9 @@ Route::prefix('v1')->name('v1.')->group(function () {
         Route::get('me', [MeController::class, 'show'])->name('me.show');
         Route::get('me/registrations', [MeController::class, 'registrations'])->name('me.registrations');
 
-        Route::apiResource('events', EventController::class)->only(['store', 'update', 'destroy']);
+        Route::post('events', [EventController::class, 'store'])->name('events.store');
+        Route::patch('events/{event}', [EventController::class, 'update'])->name('events.update');
+        Route::delete('events/{event}', [EventController::class, 'destroy'])->name('events.destroy');
         Route::get('events/{event}/attendees', [AttendeeController::class, 'index'])->name('events.attendees.index');
         Route::put('events/{event}/registration', [RegistrationController::class, 'update'])->name('events.registration.update');
         Route::delete('events/{event}/registration', [RegistrationController::class, 'destroy'])->name('events.registration.destroy');

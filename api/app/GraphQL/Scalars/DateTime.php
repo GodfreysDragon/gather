@@ -2,6 +2,7 @@
 
 namespace App\GraphQL\Scalars;
 
+use App\Rules\Iso8601DateTime;
 use Illuminate\Support\Carbon;
 use InvalidArgumentException;
 use Nuwave\Lighthouse\Schema\Types\Scalars\DateScalar;
@@ -12,8 +13,6 @@ use Nuwave\Lighthouse\Schema\Types\Scalars\DateScalar;
  */
 class DateTime extends DateScalar
 {
-    private const ISO_8601 = '/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:?\d{2})$/';
-
     protected function format(Carbon $carbon): string
     {
         return $carbon->utc()->toIso8601ZuluString();
@@ -21,7 +20,7 @@ class DateTime extends DateScalar
 
     protected function parse(string $value): Carbon
     {
-        if (preg_match(self::ISO_8601, $value) !== 1) {
+        if (preg_match(Iso8601DateTime::PATTERN, $value) !== 1) {
             throw new InvalidArgumentException("Expected an ISO 8601 date-time with offset, got \"{$value}\".");
         }
 

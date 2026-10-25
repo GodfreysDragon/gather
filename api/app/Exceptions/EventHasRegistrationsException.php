@@ -4,9 +4,9 @@ namespace App\Exceptions;
 
 class EventHasRegistrationsException extends DomainException
 {
-    public function __construct(int $registered)
+    public function __construct(int $registered, string $instead = 'deleting it')
     {
-        parent::__construct("This event has {$registered} registration(s). Cancel it instead of deleting it.");
+        parent::__construct("This event has {$registered} registration(s). Cancel it instead of {$instead}.");
     }
 
     public function errorCode(): string

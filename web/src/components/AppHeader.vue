@@ -49,7 +49,10 @@ async function logout(): Promise<void> {
           >
             New event
           </RouterLink>
-          <span class="hidden text-sm text-slate-500 md:inline" data-testid="current-user">
+          <span
+            class="hidden text-sm text-slate-500 md:inline dark:text-slate-400"
+            data-testid="current-user"
+          >
             {{ auth.user?.name }}
           </span>
           <button type="button" class="btn-secondary py-1.5" @click="logout">Log out</button>

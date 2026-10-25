@@ -29,19 +29,34 @@ class EventPolicy
         return true;
     }
 
-    public function update(User $user, Event $event): bool
+    public function update(User $user, Event $event): Response
     {
-        return $this->isOrganizer($user, $event);
+        return $this->organizerOnly($user, $event);
     }
 
-    public function delete(User $user, Event $event): bool
+    public function delete(User $user, Event $event): Response
     {
-        return $this->isOrganizer($user, $event);
+        return $this->organizerOnly($user, $event);
     }
 
-    public function viewAttendees(User $user, Event $event): bool
+    public function viewAttendees(User $user, Event $event): Response
     {
-        return $this->isOrganizer($user, $event);
+        return $this->organizerOnly($user, $event);
+    }
+
+    /**
+     * A 403 for events the user can see, but a 404 for someone else's draft, so writes
+     * don't reveal a draft's existence any more than reads do.
+     */
+    private function organizerOnly(User $user, Event $event): Response
+    {
+        if ($this->isOrganizer($user, $event)) {
+            return Response::allow();
+        }
+
+        return $event->status === EventStatus::Draft
+            ? Response::denyAsNotFound('Event not found.')
+            : Response::deny();
     }
 
     private function isOrganizer(?User $user, Event $event): bool

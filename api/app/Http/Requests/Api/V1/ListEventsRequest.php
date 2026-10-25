@@ -4,6 +4,7 @@ namespace App\Http\Requests\Api\V1;
 
 use App\Enums\EventStatus;
 use App\Models\Event;
+use App\Rules\Iso8601DateTime;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -21,8 +22,8 @@ class ListEventsRequest extends FormRequest
         return [
             'q' => ['sometimes', 'string', 'max:100'],
             'city' => ['sometimes', 'string', 'max:100'],
-            'from' => ['sometimes', 'date'],
-            'to' => ['sometimes', 'date', 'after_or_equal:from'],
+            'from' => ['sometimes', new Iso8601DateTime, 'date'],
+            'to' => ['sometimes', new Iso8601DateTime, 'date', 'after_or_equal:from'],
             'venue_id' => ['sometimes', 'integer'],
             'organizer_id' => ['sometimes', 'integer'],
             'status' => ['sometimes', Rule::enum(EventStatus::class)],

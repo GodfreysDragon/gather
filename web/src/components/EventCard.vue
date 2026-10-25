@@ -4,7 +4,14 @@ import EventBadges from './EventBadges.vue'
 import type { EventItem } from '@/domain/types'
 import { formatDay, formatEventTime } from '@/utils/format'
 
-const props = defineProps<{ event: EventItem }>()
+const props = withDefaults(
+  defineProps<{
+    event: EventItem
+    /** Level of the title heading, so cards fit the page outline (h2 under an h1, h3 under an h2). */
+    headingLevel?: 2 | 3
+  }>(),
+  { headingLevel: 2 },
+)
 
 const day = computed(() => formatDay(props.event.startsAt))
 const fill = computed(() =>
@@ -26,9 +33,13 @@ const fill = computed(() =>
         <span class="text-xl leading-none font-bold">{{ day.day }}</span>
       </div>
       <div class="min-w-0">
-        <h3 class="font-semibold group-hover:text-brand-600 dark:group-hover:text-brand-100">
+        <component
+          :is="`h${headingLevel}`"
+          class="font-semibold group-hover:text-brand-600 dark:group-hover:text-brand-100"
+          data-testid="event-card-title"
+        >
           {{ event.title }}
-        </h3>
+        </component>
         <p class="mt-0.5 text-sm text-slate-500 dark:text-slate-400">
           {{ event.venue.name }} · {{ event.venue.city }}
         </p>
@@ -39,14 +50,22 @@ const fill = computed(() =>
     </div>
 
     <div class="mt-4 flex items-center gap-3">
-      <div class="h-1.5 flex-1 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
+      <div
+        role="meter"
+        aria-label="Spots taken"
+        aria-valuemin="0"
+        :aria-valuemax="event.capacity"
+        :aria-valuenow="Math.min(event.registrationCount, event.capacity)"
+        :aria-valuetext="`${event.registrationCount} of ${event.capacity} spots taken`"
+        class="h-1.5 flex-1 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800"
+      >
         <div
           class="h-full rounded-full"
           :class="event.spotsLeft === 0 ? 'bg-red-500' : 'bg-brand-500'"
           :style="{ width: `${fill}%` }"
         />
       </div>
-      <span class="text-xs text-slate-500" data-testid="spots-left">
+      <span class="text-xs text-slate-500 dark:text-slate-400" data-testid="spots-left">
         {{ event.spotsLeft === 0 ? 'Full' : `${event.spotsLeft} of ${event.capacity} left` }}
       </span>
     </div>

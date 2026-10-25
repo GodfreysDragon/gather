@@ -1,17 +1,20 @@
 <script setup lang="ts">
 import { storeToRefs } from 'pinia'
-import { computed, reactive, ref, watch } from 'vue'
+import { computed, reactive, ref, useTemplateRef, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { ApiError } from '@/api/errors'
+import { ApiError, toApiError, type FieldErrors } from '@/api/errors'
 import ErrorAlert from '@/components/ErrorAlert.vue'
 import { useResource } from '@/composables/useResource'
 import type { EventInput, EventItem, EventStatus } from '@/domain/types'
+import { useAuthStore } from '@/stores/auth'
 import { useTransportStore } from '@/stores/transport'
+import { focusFirstInvalid } from '@/utils/focus'
 import { toLocalInput } from '@/utils/format'
 
 const props = defineProps<{ id?: number }>()
 
 const router = useRouter()
+const auth = useAuthStore()
 const { repository } = storeToRefs(useTransportStore())
 const isEdit = computed(() => props.id !== undefined)
 
@@ -40,10 +43,6 @@ const form = reactive<FormState>({
   status: 'published',
 })
 
-/** Snapshot of the loaded event, so an edit only PATCHes the fields that changed. */
-let original: FormState | null = null
-const loadError = ref<ApiError | null>(null)
-
 function toForm(event: EventItem): FormState {
   return {
     title: event.title,
@@ -56,28 +55,39 @@ function toForm(event: EventItem): FormState {
   }
 }
 
-watch(
-  () => props.id,
-  async (id) => {
-    if (id === undefined) return
-    try {
-      const event = await repository.value.getEvent(id)
-      if (!event || !event.viewer.isOrganizer) {
-        loadError.value = new ApiError(
-          'not_found',
-          "This event doesn't exist or you don't organize it.",
-          404,
-        )
-        return
-      }
-      original = toForm(event)
-      Object.assign(form, original)
-    } catch (e) {
-      loadError.value = e instanceof ApiError ? e : new ApiError('unknown', String(e))
-    }
-  },
-  { immediate: true },
+const sameForm = (a: FormState, b: FormState) =>
+  (Object.keys(a) as (keyof FormState)[]).every((key) => a[key] === b[key])
+
+// In edit mode, (re)load the event whenever the id, the transport or the user changes.
+const {
+  data: loaded,
+  error: eventError,
+  loading: eventLoading,
+} = useResource(
+  (repo) => (props.id === undefined ? Promise.resolve(null) : repo.getEvent(props.id)),
+  [() => props.id, () => auth.user?.id],
 )
+
+/** Snapshot of the loaded event, so an edit only PATCHes the fields that changed. */
+const original = ref<FormState | null>(null)
+
+watch(loaded, (event) => {
+  if (!event?.viewer.isOrganizer) return
+  const next = toForm(event)
+  // A reload (e.g. after switching transport) must not throw away edits in progress.
+  if (!original.value || sameForm(form, original.value)) Object.assign(form, next)
+  original.value = next
+})
+
+const loadError = computed<ApiError | null>(() => {
+  if (!isEdit.value) return null
+  if (eventError.value) return eventError.value
+  if (eventLoading.value) return null
+  if (!loaded.value?.viewer.isOrganizer) {
+    return new ApiError('not_found', "This event doesn't exist or you don't organize it.", 404)
+  }
+  return null
+})
 
 const selectedVenue = computed(() =>
   venues.value?.find((venue) => String(venue.id) === form.venueId),
@@ -97,8 +107,8 @@ function toInput(state: FormState): EventInput {
 
 function changedFields(): Partial<EventInput> {
   const next = toInput(form)
-  if (!original) return next
-  const before = toInput(original)
+  if (!original.value) return next
+  const before = toInput(original.value)
   return Object.fromEntries(
     (Object.keys(next) as (keyof EventInput)[])
       .filter((key) => String(next[key]) !== String(before[key]))
@@ -106,21 +116,53 @@ function changedFields(): Partial<EventInput> {
   )
 }
 
+/** Checks the browser can turn the date fields into instants; everything else is the server's job. */
+function clientErrors(): FieldErrors {
+  const errors: FieldErrors = {}
+  if (Number.isNaN(new Date(form.startsAt).getTime())) {
+    errors.startsAt = ['Enter a start date and time.']
+  }
+  if (Number.isNaN(new Date(form.endsAt).getTime())) {
+    errors.endsAt = ['Enter an end date and time.']
+  }
+  return errors
+}
+
 const saving = ref(false)
 const error = ref<ApiError | null>(null)
 const fieldError = (field: keyof EventInput) => error.value?.fieldErrors[field]?.[0]
+/** Links an input to its error message for screen readers. */
+const describedBy = (field: keyof EventInput) => (fieldError(field) ? `${field}-error` : undefined)
+const formEl = useTemplateRef<HTMLFormElement>('formRef')
+
+const detailRoute = computed(() =>
+  props.id === undefined ? { name: 'events' } : { name: 'event', params: { id: props.id } },
+)
 
 async function submit(): Promise<void> {
-  saving.value = true
   error.value = null
+
+  const invalid = clientErrors()
+  if (Object.keys(invalid).length > 0) {
+    error.value = new ApiError('validation_failed', 'Validation failed', null, invalid)
+    void focusFirstInvalid(formEl.value)
+    return
+  }
+
+  saving.value = true
   try {
-    const event =
-      props.id === undefined
-        ? await repository.value.createEvent(toInput(form))
-        : await repository.value.updateEvent(props.id, changedFields())
-    await router.push({ name: 'event', params: { id: event.id } })
+    if (props.id === undefined) {
+      const event = await repository.value.createEvent(toInput(form))
+      await router.push({ name: 'event', params: { id: event.id } })
+      return
+    }
+
+    const changes = changedFields()
+    if (Object.keys(changes).length > 0) await repository.value.updateEvent(props.id, changes)
+    await router.push(detailRoute.value)
   } catch (e) {
-    error.value = e instanceof ApiError ? e : new ApiError('unknown', String(e))
+    error.value = toApiError(e)
+    if (error.value.isValidation) void focusFirstInvalid(formEl.value)
   } finally {
     saving.value = false
   }
@@ -135,9 +177,9 @@ async function submit(): Promise<void> {
 
     <ErrorAlert v-if="loadError" :error="loadError" />
 
-    <form v-else class="card space-y-5 p-6" novalidate @submit.prevent="submit">
+    <form v-else ref="formRef" class="card space-y-5 p-6" novalidate @submit.prevent="submit">
       <ErrorAlert v-if="error && !error.isValidation" :error="error" />
-      <p v-if="error?.isValidation" class="text-sm text-red-600" role="alert">
+      <p v-if="error?.isValidation" class="text-sm text-red-600 dark:text-red-400" role="alert">
         Please fix the highlighted fields.
       </p>
 
@@ -148,9 +190,14 @@ async function submit(): Promise<void> {
           v-model="form.title"
           class="input"
           :aria-invalid="!!fieldError('title')"
+          :aria-describedby="describedBy('title')"
           data-testid="title"
         />
-        <p v-if="fieldError('title')" class="mt-1 text-sm text-red-600">
+        <p
+          v-if="fieldError('title')"
+          id="title-error"
+          class="mt-1 text-sm text-red-600 dark:text-red-400"
+        >
           {{ fieldError('title') }}
         </p>
       </div>
@@ -163,9 +210,14 @@ async function submit(): Promise<void> {
           rows="4"
           class="input"
           :aria-invalid="!!fieldError('description')"
+          :aria-describedby="describedBy('description')"
           data-testid="description"
         />
-        <p v-if="fieldError('description')" class="mt-1 text-sm text-red-600">
+        <p
+          v-if="fieldError('description')"
+          id="description-error"
+          class="mt-1 text-sm text-red-600 dark:text-red-400"
+        >
           {{ fieldError('description') }}
         </p>
       </div>
@@ -178,6 +230,7 @@ async function submit(): Promise<void> {
             v-model="form.venueId"
             class="input"
             :aria-invalid="!!fieldError('venueId')"
+            :aria-describedby="describedBy('venueId')"
             data-testid="venue"
           >
             <option value="" disabled>Choose a venue</option>
@@ -185,7 +238,11 @@ async function submit(): Promise<void> {
               {{ venue.name }} ({{ venue.city }})
             </option>
           </select>
-          <p v-if="fieldError('venueId')" class="mt-1 text-sm text-red-600">
+          <p
+            v-if="fieldError('venueId')"
+            id="venueId-error"
+            class="mt-1 text-sm text-red-600 dark:text-red-400"
+          >
             {{ fieldError('venueId') }}
           </p>
         </div>
@@ -198,12 +255,17 @@ async function submit(): Promise<void> {
             min="1"
             class="input"
             :aria-invalid="!!fieldError('capacity')"
+            :aria-describedby="describedBy('capacity')"
             data-testid="capacity"
           />
-          <p v-if="fieldError('capacity')" class="mt-1 text-sm text-red-600">
+          <p
+            v-if="fieldError('capacity')"
+            id="capacity-error"
+            class="mt-1 text-sm text-red-600 dark:text-red-400"
+          >
             {{ fieldError('capacity') }}
           </p>
-          <p v-else-if="selectedVenue" class="mt-1 text-xs text-slate-500">
+          <p v-else-if="selectedVenue" class="mt-1 text-xs text-slate-500 dark:text-slate-400">
             Venue holds {{ selectedVenue.capacity }}.
           </p>
         </div>
@@ -218,8 +280,13 @@ async function submit(): Promise<void> {
             type="datetime-local"
             class="input"
             :aria-invalid="!!fieldError('startsAt')"
+            :aria-describedby="describedBy('startsAt')"
           />
-          <p v-if="fieldError('startsAt')" class="mt-1 text-sm text-red-600">
+          <p
+            v-if="fieldError('startsAt')"
+            id="startsAt-error"
+            class="mt-1 text-sm text-red-600 dark:text-red-400"
+          >
             {{ fieldError('startsAt') }}
           </p>
         </div>
@@ -231,15 +298,21 @@ async function submit(): Promise<void> {
             type="datetime-local"
             class="input"
             :aria-invalid="!!fieldError('endsAt')"
+            :aria-describedby="describedBy('endsAt')"
             data-testid="ends"
           />
-          <p v-if="fieldError('endsAt')" class="mt-1 text-sm text-red-600" data-testid="ends-error">
+          <p
+            v-if="fieldError('endsAt')"
+            id="endsAt-error"
+            class="mt-1 text-sm text-red-600 dark:text-red-400"
+            data-testid="ends-error"
+          >
             {{ fieldError('endsAt') }}
           </p>
         </div>
       </div>
 
-      <fieldset>
+      <fieldset :aria-describedby="describedBy('status')">
         <legend class="label">Status</legend>
         <div class="flex flex-wrap gap-4 text-sm">
           <label class="flex items-center gap-2">
@@ -255,14 +328,23 @@ async function submit(): Promise<void> {
             Cancelled
           </label>
         </div>
-        <p v-if="fieldError('status')" class="mt-1 text-sm text-red-600">
+        <p
+          v-if="fieldError('status')"
+          id="status-error"
+          class="mt-1 text-sm text-red-600 dark:text-red-400"
+        >
           {{ fieldError('status') }}
         </p>
       </fieldset>
 
       <div class="flex justify-end gap-3 pt-2">
-        <button type="button" class="btn-secondary" @click="router.back()">Cancel</button>
-        <button type="submit" class="btn-primary" :disabled="saving" data-testid="save">
+        <RouterLink :to="detailRoute" class="btn-secondary">Cancel</RouterLink>
+        <button
+          type="submit"
+          class="btn-primary"
+          :disabled="saving || (isEdit && !original)"
+          data-testid="save"
+        >
           {{ saving ? 'Saving…' : isEdit ? 'Save changes' : 'Create event' }}
         </button>
       </div>

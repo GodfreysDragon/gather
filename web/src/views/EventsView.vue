@@ -1,13 +1,15 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { useRoute, useRouter, type LocationQuery } from 'vue-router'
 import ErrorAlert from '@/components/ErrorAlert.vue'
 import EventCard from '@/components/EventCard.vue'
 import { useResource } from '@/composables/useResource'
 import type { EventFilters, EventSort } from '@/domain/types'
+import { useAuthStore } from '@/stores/auth'
 
 const route = useRoute()
 const router = useRouter()
+const auth = useAuthStore()
 
 const sortOptions: { value: EventSort; label: string }[] = [
   { value: 'starts_at', label: 'Soonest first' },
@@ -16,19 +18,28 @@ const sortOptions: { value: EventSort; label: string }[] = [
   { value: '-created_at', label: 'Newly added' },
 ]
 
-/** The URL is the source of truth for filters, so every view is linkable and back/forward works. */
+/**
+ * The URL is the source of truth for filters, so every view is linkable and back/forward works.
+ * It's only followed while this view is the current route, so navigating away doesn't refetch.
+ */
+const query = computed<LocationQuery>((previous) =>
+  route.name === 'events' ? route.query : (previous ?? {}),
+)
 const filters = computed<EventFilters>(() => ({
-  q: (route.query.q as string) || undefined,
-  city: (route.query.city as string) || undefined,
-  hasSpots: route.query.has_spots === '1',
-  sort: (route.query.sort as EventSort) || 'starts_at',
+  q: (query.value.q as string) || undefined,
+  city: (query.value.city as string) || undefined,
+  hasSpots: query.value.has_spots === '1',
+  sort: (query.value.sort as EventSort) || 'starts_at',
   from: new Date(new Date().setHours(0, 0, 0, 0)),
 }))
-const page = computed(() => Number(route.query.page) || 1)
+const page = computed(() => Number(query.value.page) || 1)
 
 const { data, error, loading, reload } = useResource(
   (repository) => repository.listEvents(filters.value, page.value),
-  [filters, page],
+  // The user id matters for the "Going"/"Organizer" badges and for drafts.
+  [filters, page, () => auth.user?.id],
+  // Dim the current page while the next one loads instead of flashing placeholders.
+  { keepPreviousData: true },
 )
 const { data: venues } = useResource((repository) => repository.listVenues())
 const cities = computed(() => [...new Set((venues.value ?? []).map((venue) => venue.city))].sort())
@@ -42,11 +53,28 @@ function setQuery(patch: Record<string, string | undefined>): void {
 
 // Debounce typing in the search box.
 const search = ref(filters.value.q ?? '')
+/** The last q the box and the URL agreed on, so our own URL updates don't overwrite typing. */
+let synced = filters.value.q
 let timer: ReturnType<typeof setTimeout> | undefined
 watch(search, (value) => {
   clearTimeout(timer)
-  timer = setTimeout(() => setQuery({ q: value.trim() || undefined }), 300)
+  const q = value.trim() || undefined
+  if (q === filters.value.q) return
+  timer = setTimeout(() => {
+    synced = q
+    setQuery({ q })
+  }, 300)
 })
+// Back/forward (or a link) changed q: show it in the box.
+watch(
+  () => filters.value.q,
+  (q) => {
+    if (q === synced) return
+    synced = q
+    search.value = q ?? ''
+  },
+)
+onBeforeUnmount(() => clearTimeout(timer))
 </script>
 
 <template>
@@ -129,7 +157,10 @@ watch(search, (value) => {
       </template>
     </div>
 
-    <p v-if="data && !error && data.items.length === 0" class="py-16 text-center text-slate-500">
+    <p
+      v-if="data && !error && data.items.length === 0"
+      class="py-16 text-center text-slate-500 dark:text-slate-400"
+    >
       No events match these filters.
     </p>
 
@@ -146,7 +177,9 @@ watch(search, (value) => {
       >
         Previous
       </button>
-      <span class="text-sm text-slate-500">Page {{ data.page }} of {{ data.lastPage }}</span>
+      <span class="text-sm text-slate-500 dark:text-slate-400"
+        >Page {{ data.page }} of {{ data.lastPage }}</span
+      >
       <button
         type="button"
         class="btn-secondary"

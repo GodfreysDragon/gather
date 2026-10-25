@@ -270,24 +270,15 @@ export const graphqlRepository: EventsRepository = {
     }))
   },
 
-  async myRegistrations() {
-    const data = await graphql<{ me: { registeredEvents: GraphQLEvent[] } | null }>(`
-      query MyRegistrations {
+  async myEvents() {
+    const data = await graphql<{
+      me: { registeredEvents: GraphQLEvent[]; organizedEvents: GraphQLEvent[] } | null
+    }>(`
+      query MyEvents {
         me {
           registeredEvents {
             ...EventFields
           }
-        }
-      }
-      ${EVENT_FIELDS}
-    `)
-    return (data.me?.registeredEvents ?? []).map(fromGraphQLEvent)
-  },
-
-  async myOrganizedEvents() {
-    const data = await graphql<{ me: { organizedEvents: GraphQLEvent[] } | null }>(`
-      query MyOrganizedEvents {
-        me {
           organizedEvents {
             ...EventFields
           }
@@ -295,7 +286,10 @@ export const graphqlRepository: EventsRepository = {
       }
       ${EVENT_FIELDS}
     `)
-    return (data.me?.organizedEvents ?? []).map(fromGraphQLEvent)
+    return {
+      going: (data.me?.registeredEvents ?? []).map(fromGraphQLEvent),
+      organizing: (data.me?.organizedEvents ?? []).map(fromGraphQLEvent),
+    }
   },
 
   async listVenues() {

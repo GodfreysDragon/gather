@@ -51,8 +51,19 @@ export function problemCode(problem: Pick<ProblemDocument, 'type' | 'status'>): 
       403: 'forbidden',
       404: 'not_found',
       429: 'rate_limited',
-    }[problem.status] ?? 'http_error'
+    }[problem.status] ?? (problem.status >= 500 ? 'server_error' : 'http_error')
   )
+}
+
+/** Normalises anything a `catch` block can receive into an ApiError. */
+export function toApiError(error: unknown): ApiError {
+  if (error instanceof ApiError) return error
+  return new ApiError('unknown', error instanceof Error ? error.message : String(error))
+}
+
+/** Thrown when fetch itself fails: DNS, CORS, connection refused, offline. */
+export function networkError(origin: string): ApiError {
+  return new ApiError('network_error', `Couldn't reach the API at ${origin}. Is it running?`)
 }
 
 export function camelizeKeys(errors: FieldErrors): FieldErrors {

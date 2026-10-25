@@ -51,6 +51,11 @@ export interface EventFilters {
   sort?: EventSort
 }
 
+export interface MyEvents {
+  going: EventItem[]
+  organizing: EventItem[]
+}
+
 export interface Page<T> {
   items: T[]
   page: number

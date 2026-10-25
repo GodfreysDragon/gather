@@ -1,9 +1,10 @@
 <script setup lang="ts">
-import { reactive, ref } from 'vue'
+import { reactive, ref, useTemplateRef } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ApiError } from '@/api/errors'
+import { toApiError, type ApiError } from '@/api/errors'
 import ErrorAlert from '@/components/ErrorAlert.vue'
 import { useAuthStore } from '@/stores/auth'
+import { focusFirstInvalid } from '@/utils/focus'
 
 const props = defineProps<{ mode: 'login' | 'register' }>()
 
@@ -15,6 +16,9 @@ const form = reactive({ name: '', email: '', password: '' })
 const error = ref<ApiError | null>(null)
 const submitting = ref(false)
 const fieldError = (field: string) => error.value?.fieldErrors[field]?.[0]
+/** Links an input to its error message for screen readers. */
+const describedBy = (field: string) => (fieldError(field) ? `${field}-error` : undefined)
+const formEl = useTemplateRef<HTMLFormElement>('formRef')
 
 async function submit(): Promise<void> {
   submitting.value = true
@@ -28,7 +32,8 @@ async function submit(): Promise<void> {
       typeof redirect === 'string' && redirect.startsWith('/') ? redirect : { name: 'events' },
     )
   } catch (e) {
-    error.value = e instanceof ApiError ? e : new ApiError('unknown', String(e))
+    error.value = toApiError(e)
+    if (error.value.isValidation) void focusFirstInvalid(formEl.value)
   } finally {
     submitting.value = false
   }
@@ -46,7 +51,7 @@ function useDemoAccount(): void {
       {{ mode === 'login' ? 'Log in to Gather' : 'Create your account' }}
     </h1>
 
-    <form class="card space-y-4 p-6" novalidate @submit.prevent="submit">
+    <form ref="formRef" class="card space-y-4 p-6" novalidate @submit.prevent="submit">
       <ErrorAlert v-if="error && !error.isValidation" :error="error" />
 
       <div v-if="mode === 'register'">
@@ -57,8 +62,15 @@ function useDemoAccount(): void {
           class="input"
           autocomplete="name"
           :aria-invalid="!!fieldError('name')"
+          :aria-describedby="describedBy('name')"
         />
-        <p v-if="fieldError('name')" class="mt-1 text-sm text-red-600">{{ fieldError('name') }}</p>
+        <p
+          v-if="fieldError('name')"
+          id="name-error"
+          class="mt-1 text-sm text-red-600 dark:text-red-400"
+        >
+          {{ fieldError('name') }}
+        </p>
       </div>
       <div>
         <label class="label" for="email">Email</label>
@@ -69,9 +81,15 @@ function useDemoAccount(): void {
           class="input"
           autocomplete="email"
           :aria-invalid="!!fieldError('email')"
+          :aria-describedby="describedBy('email')"
           data-testid="email"
         />
-        <p v-if="fieldError('email')" class="mt-1 text-sm text-red-600" data-testid="email-error">
+        <p
+          v-if="fieldError('email')"
+          id="email-error"
+          class="mt-1 text-sm text-red-600 dark:text-red-400"
+          data-testid="email-error"
+        >
           {{ fieldError('email') }}
         </p>
       </div>
@@ -84,9 +102,14 @@ function useDemoAccount(): void {
           class="input"
           :autocomplete="mode === 'login' ? 'current-password' : 'new-password'"
           :aria-invalid="!!fieldError('password')"
+          :aria-describedby="describedBy('password')"
           data-testid="password"
         />
-        <p v-if="fieldError('password')" class="mt-1 text-sm text-red-600">
+        <p
+          v-if="fieldError('password')"
+          id="password-error"
+          class="mt-1 text-sm text-red-600 dark:text-red-400"
+        >
           {{ fieldError('password') }}
         </p>
       </div>
@@ -98,19 +121,19 @@ function useDemoAccount(): void {
       <button
         v-if="mode === 'login'"
         type="button"
-        class="w-full text-center text-sm text-brand-600 hover:underline"
+        class="w-full text-center text-sm text-brand-600 hover:underline dark:text-brand-300"
         @click="useDemoAccount"
       >
         Use the demo account
       </button>
     </form>
 
-    <p class="mt-4 text-center text-sm text-slate-500">
+    <p class="mt-4 text-center text-sm text-slate-500 dark:text-slate-400">
       <template v-if="mode === 'login'">
         New here?
         <RouterLink
           :to="{ name: 'register', query: route.query }"
-          class="text-brand-600 hover:underline"
+          class="text-brand-600 hover:underline dark:text-brand-300"
           >Create an account</RouterLink
         >
       </template>
@@ -118,7 +141,7 @@ function useDemoAccount(): void {
         Already have an account?
         <RouterLink
           :to="{ name: 'login', query: route.query }"
-          class="text-brand-600 hover:underline"
+          class="text-brand-600 hover:underline dark:text-brand-300"
           >Log in</RouterLink
         >
       </template>
