@@ -7,6 +7,7 @@ use App\Models\Event;
 use App\Models\User;
 use App\Models\Venue;
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Seeder;
 
 class DatabaseSeeder extends Seeder
@@ -15,9 +16,14 @@ class DatabaseSeeder extends Seeder
 
     /**
      * Seed a demo dataset. Sign in as demo@gather.test / password.
+     *
+     * The data is the same on every run (fixed Faker seed, Faker-picked attendees), so
+     * the demo, the screenshots and the end-to-end test all see the same events.
      */
     public function run(): void
     {
+        fake()->seed(2026);
+
         $demo = User::factory()->create(['name' => 'Demo User', 'email' => 'demo@gather.test']);
         $organizers = User::factory(4)->create();
         $attendees = User::factory(40)->create();
@@ -50,7 +56,7 @@ class DatabaseSeeder extends Seeder
                 'capacity' => min($venue->capacity, fake()->randomElement([20, 30, 50, 80])),
             ]);
 
-            $event->attendees()->attach($attendees->random(fake()->numberBetween(0, min(18, $event->capacity - 1))));
+            $event->attendees()->attach($this->pick($attendees, fake()->numberBetween(0, min(18, $event->capacity - 1))));
         }
 
         // A sold-out event, so "Event is full" can be seen in the UI.
@@ -59,7 +65,7 @@ class DatabaseSeeder extends Seeder
             'starts_at' => now()->addDays(6)->setTime(10, 0),
             'ends_at' => now()->addDays(6)->setTime(12, 0),
         ]);
-        $full->attendees()->attach($attendees->random(12));
+        $full->attendees()->attach($this->pick($attendees, 12));
 
         Event::factory()->for($organizers[1], 'organizer')->for($venues[2])->cancelled()->create([
             'title' => 'Cancelled: Sunset JS cruise',
@@ -77,5 +83,14 @@ class DatabaseSeeder extends Seeder
             ->limit(2)
             ->get()
             ->each(fn (Event $event) => $event->attendees()->syncWithoutDetaching([$demo->id]));
+    }
+
+    /**
+     * @param  Collection<int, User>  $users
+     * @return list<int>
+     */
+    private function pick(Collection $users, int $count): array
+    {
+        return fake()->randomElements($users->modelKeys(), $count);
     }
 }
