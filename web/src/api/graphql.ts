@@ -142,10 +142,6 @@ export function fromGraphQLError(error: GraphQLError): ApiError {
   if (ext.guards !== undefined || ext.category === 'authentication') {
     return new ApiError('unauthenticated', error.message, 401)
   }
-  // Lighthouse 6 gives authorization errors no extensions, so its fixed message is the only marker.
-  if (ext.category === 'authorization' || error.message === 'This action is unauthorized.') {
-    return new ApiError('forbidden', error.message, 403)
-  }
   if (ext.code) {
     const code = ext.code.toLowerCase()
     return new ApiError(code, error.message, STATUS_BY_CODE[code] ?? 409)

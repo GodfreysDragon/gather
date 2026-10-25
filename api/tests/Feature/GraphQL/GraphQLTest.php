@@ -154,7 +154,9 @@ class GraphQLTest extends TestCase
         $mutation = /** @lang GraphQL */ 'mutation ($id: ID!) { updateEvent(id: $id, input: { title: "Renamed" }) { title } }';
 
         Sanctum::actingAs(User::factory()->create());
-        $this->graphQL($mutation, ['id' => $event->id])->assertGraphQLErrorMessage('This action is unauthorized.');
+        $this->graphQL($mutation, ['id' => $event->id])
+            ->assertGraphQLErrorMessage('This action is unauthorized.')
+            ->assertJsonPath('errors.0.extensions.code', 'FORBIDDEN');
 
         Sanctum::actingAs($event->organizer);
         $this->graphQL($mutation, ['id' => $event->id])->assertJsonPath('data.updateEvent.title', 'Renamed');
@@ -195,7 +197,9 @@ class GraphQLTest extends TestCase
         $query = /** @lang GraphQL */ 'query ($id: ID!) { event(id: $id) { attendees { data { user { name } } } } }';
 
         Sanctum::actingAs(User::factory()->create());
-        $this->graphQL($query, ['id' => $event->id])->assertGraphQLErrorMessage('This action is unauthorized.');
+        $this->graphQL($query, ['id' => $event->id])
+            ->assertGraphQLErrorMessage('This action is unauthorized.')
+            ->assertJsonPath('errors.0.extensions.code', 'FORBIDDEN');
 
         Sanctum::actingAs($event->organizer);
         $this->graphQL($query, ['id' => $event->id])->assertJsonCount(2, 'data.event.attendees.data');

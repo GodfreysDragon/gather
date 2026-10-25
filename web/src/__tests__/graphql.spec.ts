@@ -90,7 +90,8 @@ describe('graphql client', () => {
     ['EVENT_FULL', 'event_full', 409],
     ['REGISTRATION_CLOSED', 'registration_closed', 409],
     ['NOT_FOUND', 'not_found', 404],
-  ])('gives business error %s the status REST would use', async (code, apiCode, status) => {
+    ['FORBIDDEN', 'forbidden', 403],
+  ])('gives error code %s the status REST would use', async (code, apiCode, status) => {
     respond(
       JSON.stringify({ data: null, errors: [{ message: 'Nope.', extensions: { code } }] }),
       200,

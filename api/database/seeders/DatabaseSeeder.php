@@ -83,16 +83,22 @@ class DatabaseSeeder extends Seeder
 
         Event::factory()->for($organizers[1], 'organizer')->for($venues[2])->cancelled()->create([
             'title' => 'Cancelled: Sunset JS cruise',
+            'starts_at' => now()->addDays(16)->setTime(19, 0),
+            'ends_at' => now()->addDays(16)->setTime(22, 0),
             'description' => 'Lightning talks on the river at sunset. Cancelled because of the weather forecast; we will be back in spring.',
         ]);
 
         // The demo user organizes one published event and one draft, and attends a few.
         Event::factory()->for($demo, 'organizer')->for($venues[0])->create([
             'title' => 'Demo User’s API design workshop',
+            'starts_at' => now()->addDays(55)->setTime(9, 0),
+            'ends_at' => now()->addDays(55)->setTime(13, 0),
             'description' => 'A half-day workshop: design a small REST API from a user story, write its OpenAPI contract and review each other\'s designs.',
         ]);
         Event::factory()->for($demo, 'organizer')->for($venues[3])->draft()->create([
             'title' => 'Draft: Spring hack night',
+            'starts_at' => now()->addDays(80)->setTime(18, 0),
+            'ends_at' => now()->addDays(80)->setTime(22, 0),
             'description' => 'An evening of building whatever you like, with mentors on hand. Details to follow.',
         ]);
 
