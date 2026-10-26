@@ -31,6 +31,10 @@ jobs:
       - run: vendor/bin/pint --test
       # The tests validate every REST call against ../openapi.yaml.
       - run: php artisan test
+      - name: Committed GraphQL schema matches the API
+        run: |
+          composer schema:graphql
+          git diff --exit-code ../schema.graphql
 
   web:
     name: Web (lint, types, unit tests, build)
@@ -54,6 +58,10 @@ jobs:
         run: |
           npm run gen:api
           git diff --exit-code src/api/schema.d.ts
+      - name: Generated GraphQL types match schema.graphql
+        run: |
+          npm run gen:graphql
+          git diff --exit-code src/api/graphql.generated.ts
 
   e2e:
     name: End-to-end (both transports)

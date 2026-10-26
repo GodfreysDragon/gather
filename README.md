@@ -20,6 +20,10 @@ both sides are checked against in CI. This is how a backend team and a frontend 
 |---|---|
 | <img src="docs/screenshots/event-detail-dark.png" alt="Event detail page in dark mode" width="560"> | <img src="docs/screenshots/events-mobile.png" alt="Event list at phone width" width="220"> |
 
+| REST reference at `/docs` | GraphQL playground at `/graphiql` |
+|---|---|
+| <img src="docs/screenshots/api-docs.png" alt="Interactive REST API reference rendered from openapi.yaml" width="420"> | <img src="docs/screenshots/graphiql.png" alt="GraphiQL running a query against the API" width="420"> |
+
 ## Architecture
 
 ```mermaid
@@ -42,11 +46,16 @@ flowchart LR
     spec[/"openapi.yaml"/]
     spec -. "validates every request &amp; response<br/>in the PHPUnit suite" .-> rest
     spec -. "generates TypeScript types<br/>(npm run gen:api)" .-> restRepo
+
+    sdl[/"schema.graphql"/]
+    gql -. "exported by<br/>composer schema:graphql" .-> sdl
+    sdl -. "generates operation types<br/>(npm run gen:graphql)" .-> gqlRepo
 ```
 
 ```
 gather/
 ├── openapi.yaml   ← the REST contract (source of truth for both sides)
+├── schema.graphql ← the compiled GraphQL schema the SPA's types are generated from
 ├── api/           ← Laravel 13 · Sanctum · Lighthouse GraphQL · SQLite
 ├── web/           ← Vue 3 · TypeScript · Vite · Pinia · Tailwind 4
 └── docs/          ← design decisions, screenshots
@@ -76,6 +85,8 @@ The two run on different origins on purpose. If you change either port, keep `VI
 
 - REST: `http://localhost:8000/api/v1/…`, documented in `openapi.yaml` (also served at `/openapi.yaml`).
 - GraphQL: `POST http://localhost:8000/graphql`, with the schema in `api/graphql/schema.graphql`.
+- **Interactive docs:** the REST reference at `http://localhost:8000/docs` (Scalar, rendered from `openapi.yaml`, with
+  "try it" against the running API) and a GraphQL playground at `http://localhost:8000/graphiql`.
 
 ## What it demonstrates
 
@@ -101,6 +112,13 @@ A test asserts that REST and GraphQL return the **same events in the same order*
 - The SPA **generates its TypeScript types from the same file** (`npm run gen:api`) and calls the API through
   `openapi-fetch`, so paths, parameters, bodies and responses are checked at compile time. CI fails if the generated
   types are stale.
+
+### Typed GraphQL too
+- The compiled schema is committed as [`schema.graphql`](schema.graphql) (`composer schema:graphql` in `api/`), and
+  CI fails if it no longer matches the API.
+- `graphql-codegen` validates every operation in `graphqlRepository.ts` against it and generates their result and
+  variable types (`npm run gen:graphql`). Querying a removed field fails code generation; changing a field's type
+  fails `npm run type-check`. CI fails if the generated types are stale.
 
 ### API design details
 - **Versioned** under `/api/v1`, with consistent `{ "data": … }` envelopes and pagination `links` and `meta`.
@@ -135,7 +153,8 @@ A test asserts that REST and GraphQL return the **same events in the same order*
   - `RegistrationPayload` mutation results;
   - Lighthouse pagination with `paginatorInfo`.
 - **Query complexity and depth limits** reject expensive queries, such as aliasing several 50-item pages, before any
-  SQL runs.
+  SQL runs. Introspection is exempt from the depth limit (it is bounded by the schema), so GraphiQL and code
+  generators work.
 - Validation errors use GraphQL field names (`input.endsAt`), even though the validation rules are shared with REST.
 - Authentication belongs to REST: GraphQL accepts the same bearer token but doesn't issue tokens.
 
@@ -160,9 +179,9 @@ A test asserts that REST and GraphQL return the **same events in the same order*
 
 | Suite | Command | What it covers |
 |---|---|---|
-| API feature tests | `cd api && php artisan test` | 60 tests: auth, listing/filtering, CRUD, policies, registration rules, problem documents, ETags, rate limits, N+1, GraphQL queries/mutations/errors/limits, REST↔GraphQL parity. Every REST request and response is validated against `openapi.yaml`. |
-| SPA unit tests | `cd web && npx vitest run` | 40 tests: error normalisation for both transports, REST and GraphQL mappers producing identical UI models, stale-response handling, session expiry, form validation and focus, components |
-| Type check / lint | `cd web && npm run type-check && npm run lint:check` | Including the generated API types |
+| API feature tests | `cd api && php artisan test` | 65 tests: auth, listing/filtering, CRUD, policies, registration rules, problem documents, ETags, rate limits, N+1, GraphQL queries/mutations/errors/limits, REST↔GraphQL parity, docs pages. Every REST request and response is validated against `openapi.yaml`. |
+| SPA unit tests | `cd web && npx vitest run` | 41 tests: error normalisation for both transports, REST and GraphQL mappers producing identical UI models, stale-response handling, session expiry, form validation and focus, components |
+| Type check / lint | `cd web && npm run type-check && npm run lint:check` | Including the generated REST and GraphQL types |
 | End-to-end | `cd web && E2E_URL=http://localhost:5173 npm run test:e2e` | 13 checks in headless Chromium against the real API, through **both** transports: listing, filters, login, `event_full` rejection, register/cancel, server-side validation, create, "My events", phone layout, no console errors. `npm run test:e2e -- --dark` repeats it in dark mode. Needs both servers running on a freshly seeded database. |
 
 All four run in [GitHub Actions](.github/workflows/ci.yml) on every push. The end-to-end job seeds a database, serves
@@ -193,11 +212,9 @@ permissions, account enumeration).
 
 ## What's next
 
-1. Generate GraphQL types too (`graphql-codegen`), so the GraphQL adapter is checked at compile time like REST.
-2. Cursor pagination for the event list, plus a `GET /events?updated_since=` feed for sync clients.
-3. `Idempotency-Key` support for `POST /events`.
-4. Serve the OpenAPI docs (Scalar or Redoc) and a GraphQL playground at the API root.
-5. A production deployment: PostgreSQL, token expiry, and the SPA on a CDN.
+1. Cursor pagination for the event list, plus a `GET /events?updated_since=` feed for sync clients.
+2. `Idempotency-Key` support for `POST /events`.
+3. A production deployment: PostgreSQL, token expiry, and the SPA on a CDN.
 
 ## License
 

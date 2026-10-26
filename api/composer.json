@@ -56,6 +56,10 @@
             "@php artisan config:clear --ansi @no_additional_args",
             "@php artisan test"
         ],
+        "schema:graphql": [
+            "@php artisan lighthouse:print-schema --sort --write --disk=local --quiet",
+            "@php -r \"file_put_contents('../schema.graphql', rtrim(file_get_contents('storage/app/private/lighthouse-schema.graphql')).PHP_EOL);\""
+        ],
         "post-autoload-dump": [
             "Illuminate\\Foundation\\ComposerScripts::postAutoloadDump",
             "@php artisan package:discover --ansi"
@@ -92,5 +96,8 @@
         }
     },
     "minimum-stability": "stable",
-    "prefer-stable": true
+    "prefer-stable": true,
+    "scripts-descriptions": {
+        "schema:graphql": "Export the compiled GraphQL schema to ../schema.graphql (the SPA generates its types from it)."
+    }
 }

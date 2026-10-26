@@ -44,11 +44,13 @@ const STATUS_BY_CODE: Record<string, number> = {
 /**
  * Minimal GraphQL client: one POST per operation, same bearer token as REST.
  * Deliberately dependency-free; the point of this app is the API, not a client cache.
+ * Callers pass the operation's generated types (`npm run gen:graphql`) as TData and
+ * TVariables, so results and variables are checked against the API's schema.
  */
-export async function graphql<T>(
+export async function graphql<TData, TVariables extends Record<string, unknown> = never>(
   query: string,
-  variables: Record<string, unknown> = {},
-): Promise<T> {
+  variables?: TVariables,
+): Promise<TData> {
   const operation = query.match(/(query|mutation)\s+(\w+)/)?.[2] ?? 'anonymous'
   const started = performance.now()
   const token = getToken()
@@ -80,7 +82,7 @@ export async function graphql<T>(
   }
 
   const body = parseJson(response, text)
-  const [error] = (body as GraphQLResponse<T> | null)?.errors ?? []
+  const [error] = (body as GraphQLResponse<TData> | null)?.errors ?? []
   log(!response.ok ? response.status : error ? 'error' : response.status, text.length)
 
   if (error) {
@@ -102,7 +104,7 @@ export async function graphql<T>(
     )
   }
 
-  return (body as GraphQLResponse<T>).data as T
+  return (body as GraphQLResponse<TData>).data as TData
 }
 
 /** The parsed body if the server sent JSON, otherwise null (e.g. an HTML error page from a proxy). */

@@ -3,6 +3,8 @@
  *
  * Needs the same setup as the smoke test (API on a freshly seeded database, SPA running):
  *   web/  E2E_URL=http://localhost:5173 npm run capture
+ * The API's docs pages load their UI from public CDNs; API_URL points at the API
+ * (default http://localhost:8000).
  * The GIF needs ffmpeg on the PATH; without it the WebM recording is kept instead.
  */
 import { execFileSync } from 'node:child_process'
@@ -11,6 +13,7 @@ import { fileURLToPath } from 'node:url'
 import { chromium } from 'playwright-core'
 
 const BASE = process.env.E2E_URL ?? 'http://localhost:5173'
+const API = process.env.API_URL ?? 'http://localhost:8000'
 const CHANNEL = process.env.E2E_BROWSER || undefined
 const OUT = fileURLToPath(new URL('../../docs/screenshots/', import.meta.url))
 const VIDEO_DIR = fileURLToPath(new URL('./screenshots/video/', import.meta.url))
@@ -114,6 +117,23 @@ for (const colorScheme of ['light', 'dark']) {
     renameSync(webm, `${OUT}transport-toggle.webm`)
   }
   rmSync(VIDEO_DIR, { recursive: true, force: true })
+}
+
+// The API's own docs: the REST reference rendered from openapi.yaml, and GraphiQL
+// with its default query run against the seeded data.
+{
+  const context = await browser.newContext({ viewport: { width: 1280, height: 800 }, deviceScaleFactor: 2 })
+  const page = await context.newPage()
+  await page.goto(`${API}/docs`)
+  await page.getByRole('heading', { name: 'Gather REST API' }).waitFor()
+  await page.waitForTimeout(500)
+  await shot(page, 'api-docs')
+
+  await page.goto(`${API}/graphiql`)
+  await page.locator('.graphiql-execute-button').click()
+  await page.waitForFunction(() => document.querySelector('.result-window')?.textContent?.includes('spotsLeft'))
+  await shot(page, 'graphiql')
+  await context.close()
 }
 
 await browser.close()

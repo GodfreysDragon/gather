@@ -7,6 +7,7 @@ and GraphQL APIs at runtime. See the [project README](../README.md) for setup an
 |---|---|
 | `npm run dev` | Dev server. Set `VITE_API_URL` in `.env` |
 | `npm run gen:api` | Regenerate `src/api/schema.d.ts` from `../openapi.yaml` (run after changing the contract) |
+| `npm run gen:graphql` | Regenerate `src/api/graphql.generated.ts` from `../schema.graphql` and validate every GraphQL operation against it |
 | `npm run build` | Type-check and build |
 | `npx vitest run` | Unit tests |
 | `npm run lint` | oxlint + ESLint, applying fixes |
