@@ -23,6 +23,12 @@ Every error uses one shape, `application/problem+json`. Business rules get stabl
 ### Hide drafts with 404, not 403
 Someone else's draft is "not found" for reads *and* writes (`PATCH`, `DELETE`, `/attendees`, and the GraphQL mutations). A 403 would confirm that the draft exists.
 
+### A change feed with tombstones
+Sync clients (a mobile app's offline cache, a calendar export) need "what changed since I last looked", not page 1 again. `GET /events?updated_since=` and GraphQL's `eventChanges` return changes oldest first through keyset cursors (`updated_at`, then `id`). Offset pages would skip rows here: an event updated while a client pages through the feed moves to the end, shifting everything after it. Lighthouse's built-in connection cursors are offsets in disguise, so `eventChanges` uses its own resolver. Deletions matter as much as updates, so events are soft-deleted and appear in the feed as tombstones with `deleted_at` set; everywhere else a deleted event is simply a 404.
+
+### Idempotent creates
+A client that times out on `POST /events` can't tell whether the event was created. With an `Idempotency-Key` it can just retry: the first response is stored for 24 hours (keyed on caller, route and key) and replayed for repeats, a lock turns concurrent duplicates into a 409, and a different body under the same key is rejected instead of silently returning an unrelated event. Server errors aren't stored, so a retry after a 500 really runs again. The SPA keeps a key only while retrying after network failures; any answer from the server starts a new attempt, so fixing a validation error doesn't trip the reused-key check.
+
 ### UTC everywhere, offsets required
 Input must be ISO 8601 with an offset. `Iso8601DateTime` is shared by REST validation and the GraphQL `DateTime` scalar. Instants are stored and returned in UTC (`…Z`). Without this, Eloquent silently drops a client's offset, and Laravel's `date` rule accepts strings like "next friday".
 
@@ -36,8 +42,8 @@ Input must be ISO 8601 with an offset. `Iso8601DateTime` is shared by REST valid
 
 These are deliberate omissions for a demo, and each would come up before a production launch:
 
-- **Token lifetime.** Tokens don't expire (`sanctum.expiration` is `null`). Production would set an expiry and add refresh or re-login.
-- **Venue creation.** Any signed-in user can create venues. A real product would add a policy or an admin role.
-- **Account enumeration.** Registration reports a taken e-mail address, and login only hashes when the user exists, so timing differs. Both are common trade-offs for usability. Hardening would mean a generic response plus a dummy hash.
+- **Registration reveals taken e-mail addresses.** Login no longer does (it always checks a password hash, and fails the same way for unknown accounts), but registering with a taken address still says so. Hiding that needs an e-mail verification flow ("check your inbox"), which this project doesn't have.
+- **No refresh tokens.** Tokens expire after a week and the SPA sends the user back to log in. A product would add refresh tokens or sliding expiry.
 - **Locking on SQLite.** Registration and capacity changes lock the event row. That serialises them on MySQL and PostgreSQL. SQLite ignores `FOR UPDATE` but serialises writers anyway, and a duplicate concurrent registration falls back to the unique index.
+- **Idempotency only on `POST /events`.** The middleware works on any write, but only event creation needs it: registration is already an idempotent `PUT`, and updates and deletes are naturally safe to repeat. GraphQL mutations don't take a key.
 - **`/me/registrations` isn't paginated.** It returns upcoming events only, which stays small for a person.
