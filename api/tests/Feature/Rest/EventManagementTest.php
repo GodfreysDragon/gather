@@ -156,9 +156,14 @@ class EventManagementTest extends TestCase
 
         $this->getJson('/api/v1/venues?city=Berlin')->assertOk()->assertJsonCount(1, 'data');
 
-        Sanctum::actingAs(User::factory()->create());
+        $venue = ['name' => 'Loft', 'address' => '1 Main St', 'city' => 'Austin', 'capacity' => 80];
 
-        $this->postJson('/api/v1/venues', ['name' => 'Loft', 'address' => '1 Main St', 'city' => 'Austin', 'capacity' => 80])
+        // Venues are shared, so only admins may add them.
+        Sanctum::actingAs(User::factory()->create());
+        $this->postJson('/api/v1/venues', $venue)->assertForbidden();
+
+        Sanctum::actingAs(User::factory()->admin()->create());
+        $this->postJson('/api/v1/venues', $venue)
             ->assertCreated()
             ->assertJsonPath('data.city', 'Austin');
     }

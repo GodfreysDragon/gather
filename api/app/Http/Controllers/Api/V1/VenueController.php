@@ -9,6 +9,7 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Http\Response;
+use Illuminate\Support\Facades\Gate;
 
 class VenueController extends Controller
 {
@@ -25,6 +26,8 @@ class VenueController extends Controller
 
     public function store(Request $request): JsonResponse
     {
+        Gate::authorize('create', Venue::class);
+
         $venue = Venue::create($request->validate([
             'name' => ['required', 'string', 'max:120'],
             'address' => ['required', 'string', 'max:255'],

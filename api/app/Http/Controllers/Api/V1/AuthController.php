@@ -19,6 +19,13 @@ use Illuminate\Validation\ValidationException;
  */
 class AuthController extends Controller
 {
+    /**
+     * A bcrypt hash (cost 12, like real passwords) of a random string nobody knows.
+     * Checking against it when the e-mail is unknown makes a failed login take as long
+     * as one with a wrong password, so response times don't reveal which accounts exist.
+     */
+    private const TIMING_HASH = '$2y$12$JNe1yNreZnk5gtJMxbiD1.8i7l8HRehwha1vJQDybXdHdfT8NjfCe';
+
     public function register(Request $request): JsonResponse
     {
         $this->normaliseEmail($request);
@@ -47,7 +54,9 @@ class AuthController extends Controller
 
         $user = User::where('email', $data['email'])->first();
 
-        if ($user === null || ! Hash::check($data['password'], $user->password)) {
+        $passwordMatches = Hash::check($data['password'], $user->password ?? self::TIMING_HASH);
+
+        if ($user === null || ! $passwordMatches) {
             throw ValidationException::withMessages(['email' => __('auth.failed')]);
         }
 
@@ -74,7 +83,8 @@ class AuthController extends Controller
 
     private function tokenResponse(Request $request, User $user, string $deviceName, int $status): JsonResponse
     {
-        $token = $user->createToken($deviceName);
+        $minutes = config('sanctum.expiration');
+        $token = $user->createToken($deviceName, expiresAt: $minutes ? now()->addMinutes($minutes) : null);
 
         // The new user isn't the request's authenticated user yet, so show their e-mail explicitly.
         $request->setUserResolver(fn () => $user);
@@ -82,6 +92,7 @@ class AuthController extends Controller
         return response()->json([
             'token' => $token->plainTextToken,
             'token_type' => 'Bearer',
+            'expires_at' => $token->accessToken->expires_at?->utc()->toIso8601ZuluString(),
             'user' => new UserResource($user),
         ], $status);
     }

@@ -211,7 +211,10 @@ export interface paths {
         /** List venues */
         get: operations["listVenues"];
         put?: never;
-        /** Create a venue */
+        /**
+         * Create a venue (admins only)
+         * @description Venues are shared by every organizer, so only admins can add them (`403` otherwise).
+         */
         post: operations["createVenue"];
         delete?: never;
         options?: never;
@@ -274,6 +277,11 @@ export interface components {
             token: string;
             /** @enum {string} */
             token_type: "Bearer";
+            /**
+             * Format: date-time
+             * @description When the token stops working (a week after issue by default; null if tokens never expire). Log in again after that.
+             */
+            expires_at: string | null;
             user: components["schemas"]["User"];
         };
         User: {
@@ -985,6 +993,7 @@ export interface operations {
                 };
             };
             401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
             422: components["responses"]["ValidationFailed"];
             429: components["responses"]["TooManyRequests"];
             500: components["responses"]["ServerError"];
