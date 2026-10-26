@@ -48,7 +48,7 @@ flowchart LR
     spec -. "generates TypeScript types<br/>(npm run gen:api)" .-> restRepo
 
     sdl[/"schema.graphql"/]
-    gql -. "printed by<br/>lighthouse:print-schema" .-> sdl
+    gql -. "exported by<br/>composer schema:graphql" .-> sdl
     sdl -. "generates operation types<br/>(npm run gen:graphql)" .-> gqlRepo
 ```
 
@@ -114,7 +114,7 @@ A test asserts that REST and GraphQL return the **same events in the same order*
   types are stale.
 
 ### Typed GraphQL too
-- The compiled schema is committed as [`schema.graphql`](schema.graphql) (`php artisan lighthouse:print-schema`), and
+- The compiled schema is committed as [`schema.graphql`](schema.graphql) (`composer schema:graphql` in `api/`), and
   CI fails if it no longer matches the API.
 - `graphql-codegen` validates every operation in `graphqlRepository.ts` against it and generates their result and
   variable types (`npm run gen:graphql`). Querying a removed field fails code generation; changing a field's type

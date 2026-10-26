@@ -33,7 +33,7 @@ jobs:
       - run: php artisan test
       - name: Committed GraphQL schema matches the API
         run: |
-          php artisan lighthouse:print-schema --sort > ../schema.graphql
+          composer schema:graphql
           git diff --exit-code ../schema.graphql
 
   web:

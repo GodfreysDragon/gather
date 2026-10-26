@@ -1,203 +1,261 @@
 input CreateEventInput {
- capacity: Int!
- description: String!
- endsAt: DateTime!
- startsAt: DateTime!
- "DRAFT or PUBLISHED (default)."
- status: EventStatus
- title: String!
- venueId: ID!
-}
-"An ISO 8601 instant, serialized in UTC, e.g. `2026-11-01T18:00:00Z`."
-scalar DateTime
-type Event {
- "Organizer only."
- attendees(
- "Limits number of fetched items. Maximum allowed value: 100."
- first: Int! = 25
- "The offset from which items are returned."
- page: Int
- ): RegistrationPaginator!
- capacity: Int!
- createdAt: DateTime!
- description: String!
- endsAt: DateTime!
- id: ID!
- organizer: User!
- registrationCount: Int!
- spotsLeft: Int!
- startsAt: DateTime!
- status: EventStatus!
- title: String!
- updatedAt: DateTime!
- venue: Venue!
- viewerIsOrganizer: Boolean!
- viewerIsRegistered: Boolean!
-}
-"A paginated list of Event items."
-type EventPaginator {
- "A list of Event items."
- data: [Event!]!
- "Pagination information about the list of items."
- paginatorInfo: PaginatorInfo!
-}
-enum EventSort {
- CREATED_AT_ASC
- CREATED_AT_DESC
- STARTS_AT_ASC
- STARTS_AT_DESC
- TITLE_ASC
- TITLE_DESC
-}
-enum EventStatus {
- CANCELLED
- DRAFT
- PUBLISHED
-}
-type Mutation {
- "Idempotent: cancelling a registration that doesn't exist is a no-op."
- cancelRegistration(eventId: ID!): Event!
- createEvent(input: CreateEventInput!): Event!
- "Only events without registrations can be deleted; cancel the others. Returns the deleted ID."
- deleteEvent(id: ID!): ID!
- "Idempotent: registering twice returns the existing registration with `created: false`."
- registerForEvent(eventId: ID!): RegistrationPayload!
- "Partial update: omitted fields keep their current value."
- updateEvent(id: ID!, input: UpdateEventInput!): Event!
-}
-"Allows ordering a list of records."
-input OrderByClause {
- "The column that is used for ordering."
- column: String!
- "The direction that is used for ordering."
- order: SortOrder!
-}
-"Aggregate functions when ordering by a relation without specifying a column."
-enum OrderByRelationAggregateFunction {
- "Amount of items."
- COUNT
-}
-"Aggregate functions when ordering by a relation that may specify a column."
-enum OrderByRelationWithColumnAggregateFunction {
- "Average."
- AVG
- "Amount of items."
- COUNT
- "Maximum."
- MAX
- "Minimum."
- MIN
- "Sum."
- SUM
-}
-"Information about pagination using a fully featured paginator."
-type PaginatorInfo {
- "Number of items in the current page."
- count: Int!
- "Index of the current page."
- currentPage: Int!
- "Index of the first item in the current page."
- firstItem: Int
- "Are there more pages after this one?"
- hasMorePages: Boolean!
- "Index of the last item in the current page."
- lastItem: Int
- "Index of the last available page."
- lastPage: Int!
- "Number of items per page."
- perPage: Int!
- "Number of total available items."
- total: Int!
-}
-type Query {
- "A single event, or null if it doesn't exist or isn't visible to the viewer."
- event(id: ID!): Event
- "Events visible to the viewer. Filters behave exactly like GET /api/v1/events."
- events(
- city: String
- "Limits number of fetched items. Maximum allowed value: 50."
- first: Int! = 12
- "Only events starting at or after this instant."
- from: DateTime
- "Only published events that still have free spots (drafts and cancelled events are excluded)."
- hasSpots: Boolean
- organizerId: ID
- "The offset from which items are returned."
- page: Int
- "Matches title or description."
- q: String
- sort: EventSort = STARTS_AT_ASC
- status: EventStatus
- "Only events starting at or before this instant."
- to: DateTime
- venueId: ID
- ): EventPaginator!
- "The authenticated user, or null for anonymous requests."
- me: Viewer
- venues(city: String): [Venue!]!
-}
-type Registration {
- id: ID!
- registeredAt: DateTime!
- user: User!
-}
-"A paginated list of Registration items."
-type RegistrationPaginator {
- "A list of Registration items."
- data: [Registration!]!
- "Pagination information about the list of items."
- paginatorInfo: PaginatorInfo!
-}
-type RegistrationPayload {
- "False if the viewer was already registered."
- created: Boolean!
- event: Event!
-}
-"Directions for ordering a list of records."
-enum SortOrder {
- "Sort records in ascending order."
- ASC
- "Sort records in descending order."
- DESC
-}
-"Specify if you want to include or exclude trashed results from a query."
-enum Trashed {
- "Only return trashed results."
- ONLY
- "Return both trashed and non-trashed results."
- WITH
- "Only return non-trashed results."
- WITHOUT
-}
-input UpdateEventInput {
- capacity: Int
- description: String
- endsAt: DateTime
- startsAt: DateTime
- status: EventStatus
- title: String
- venueId: ID
-}
-"A public profile."
-type User {
- id: ID!
- name: String!
-}
-type Venue {
- address: String!
- capacity: Int!
- city: String!
- id: ID!
- name: String!
-}
-"The authenticated user, including private fields."
-type Viewer {
- email: String!
- id: ID!
- name: String!
- "Events the viewer organizes, including drafts, soonest first."
- organizedEvents: [Event!]!
- "Upcoming events the viewer is registered for, soonest first."
- registeredEvents: [Event!]!
+  capacity: Int!
+  description: String!
+  endsAt: DateTime!
+  startsAt: DateTime!
+
+  "DRAFT or PUBLISHED (default)."
+  status: EventStatus
+  title: String!
+  venueId: ID!
 }
 
+"An ISO 8601 instant, serialized in UTC, e.g. `2026-11-01T18:00:00Z`."
+scalar DateTime
+
+type Event {
+  "Organizer only."
+  attendees(
+    "Limits number of fetched items. Maximum allowed value: 100."
+    first: Int! = 25
+
+    "The offset from which items are returned."
+    page: Int
+  ): RegistrationPaginator!
+
+  capacity: Int!
+  createdAt: DateTime!
+  description: String!
+  endsAt: DateTime!
+  id: ID!
+  organizer: User!
+  registrationCount: Int!
+  spotsLeft: Int!
+  startsAt: DateTime!
+  status: EventStatus!
+  title: String!
+  updatedAt: DateTime!
+  venue: Venue!
+  viewerIsOrganizer: Boolean!
+  viewerIsRegistered: Boolean!
+}
+
+"A paginated list of Event items."
+type EventPaginator {
+  "A list of Event items."
+  data: [Event!]!
+
+  "Pagination information about the list of items."
+  paginatorInfo: PaginatorInfo!
+}
+
+enum EventSort {
+  CREATED_AT_ASC
+  CREATED_AT_DESC
+  STARTS_AT_ASC
+  STARTS_AT_DESC
+  TITLE_ASC
+  TITLE_DESC
+}
+
+enum EventStatus {
+  CANCELLED
+  DRAFT
+  PUBLISHED
+}
+
+type Mutation {
+  "Idempotent: cancelling a registration that doesn't exist is a no-op."
+  cancelRegistration(eventId: ID!): Event!
+
+  createEvent(input: CreateEventInput!): Event!
+
+  "Only events without registrations can be deleted; cancel the others. Returns the deleted ID."
+  deleteEvent(id: ID!): ID!
+
+  "Idempotent: registering twice returns the existing registration with `created: false`."
+  registerForEvent(eventId: ID!): RegistrationPayload!
+
+  "Partial update: omitted fields keep their current value."
+  updateEvent(id: ID!, input: UpdateEventInput!): Event!
+}
+
+"Allows ordering a list of records."
+input OrderByClause {
+  "The column that is used for ordering."
+  column: String!
+
+  "The direction that is used for ordering."
+  order: SortOrder!
+}
+
+"Aggregate functions when ordering by a relation without specifying a column."
+enum OrderByRelationAggregateFunction {
+  "Amount of items."
+  COUNT
+}
+
+"Aggregate functions when ordering by a relation that may specify a column."
+enum OrderByRelationWithColumnAggregateFunction {
+  "Average."
+  AVG
+
+  "Amount of items."
+  COUNT
+
+  "Maximum."
+  MAX
+
+  "Minimum."
+  MIN
+
+  "Sum."
+  SUM
+}
+
+"Information about pagination using a fully featured paginator."
+type PaginatorInfo {
+  "Number of items in the current page."
+  count: Int!
+
+  "Index of the current page."
+  currentPage: Int!
+
+  "Index of the first item in the current page."
+  firstItem: Int
+
+  "Are there more pages after this one?"
+  hasMorePages: Boolean!
+
+  "Index of the last item in the current page."
+  lastItem: Int
+
+  "Index of the last available page."
+  lastPage: Int!
+
+  "Number of items per page."
+  perPage: Int!
+
+  "Number of total available items."
+  total: Int!
+}
+
+type Query {
+  "A single event, or null if it doesn't exist or isn't visible to the viewer."
+  event(id: ID!): Event
+
+  "Events visible to the viewer. Filters behave exactly like GET /api/v1/events."
+  events(
+    city: String
+
+    "Limits number of fetched items. Maximum allowed value: 50."
+    first: Int! = 12
+
+    "Only events starting at or after this instant."
+    from: DateTime
+
+    "Only published events that still have free spots (drafts and cancelled events are excluded)."
+    hasSpots: Boolean
+
+    organizerId: ID
+
+    "The offset from which items are returned."
+    page: Int
+
+    "Matches title or description."
+    q: String
+
+    sort: EventSort = STARTS_AT_ASC
+    status: EventStatus
+
+    "Only events starting at or before this instant."
+    to: DateTime
+
+    venueId: ID
+  ): EventPaginator!
+
+  "The authenticated user, or null for anonymous requests."
+  me: Viewer
+
+  venues(city: String): [Venue!]!
+}
+
+type Registration {
+  id: ID!
+  registeredAt: DateTime!
+  user: User!
+}
+
+"A paginated list of Registration items."
+type RegistrationPaginator {
+  "A list of Registration items."
+  data: [Registration!]!
+
+  "Pagination information about the list of items."
+  paginatorInfo: PaginatorInfo!
+}
+
+type RegistrationPayload {
+  "False if the viewer was already registered."
+  created: Boolean!
+
+  event: Event!
+}
+
+"Directions for ordering a list of records."
+enum SortOrder {
+  "Sort records in ascending order."
+  ASC
+
+  "Sort records in descending order."
+  DESC
+}
+
+"Specify if you want to include or exclude trashed results from a query."
+enum Trashed {
+  "Only return trashed results."
+  ONLY
+
+  "Return both trashed and non-trashed results."
+  WITH
+
+  "Only return non-trashed results."
+  WITHOUT
+}
+
+input UpdateEventInput {
+  capacity: Int
+  description: String
+  endsAt: DateTime
+  startsAt: DateTime
+  status: EventStatus
+  title: String
+  venueId: ID
+}
+
+"A public profile."
+type User {
+  id: ID!
+  name: String!
+}
+
+type Venue {
+  address: String!
+  capacity: Int!
+  city: String!
+  id: ID!
+  name: String!
+}
+
+"The authenticated user, including private fields."
+type Viewer {
+  email: String!
+  id: ID!
+  name: String!
+
+  "Events the viewer organizes, including drafts, soonest first."
+  organizedEvents: [Event!]!
+
+  "Upcoming events the viewer is registered for, soonest first."
+  registeredEvents: [Event!]!
+}
