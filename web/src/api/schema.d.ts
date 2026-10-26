@@ -100,10 +100,25 @@ export interface paths {
          * List events
          * @description Published and cancelled events, plus drafts organized by the caller.
          *     Filters are combined with AND.
+         *
+         *     **Pagination.** Page numbers by default. Pass `pagination=cursor` for cursor pagination
+         *     instead, then follow `links.next` (or pass `meta.next_cursor` as `cursor`).
+         *
+         *     **Change feed.** `updated_since` returns every event changed at or after that instant,
+         *     oldest change first and always cursor-paginated, so sync clients can resume where they
+         *     stopped. Deleted events appear as tombstones: the usual representation with `deleted_at`
+         *     set. It can't be combined with `sort`.
          */
         get: operations["listEvents"];
         put?: never;
-        /** Create an event (you become its organizer) */
+        /**
+         * Create an event (you become its organizer)
+         * @description Safe to retry with an `Idempotency-Key` header: repeating a request with the same key
+         *     and body within 24 hours returns the original response (marked `Idempotent-Replayed: true`)
+         *     instead of creating another event. Reusing a key with a different body is a 422
+         *     (`idempotency-key-reused`); a repeat while the first request is still running is a 409
+         *     (`idempotency-in-progress`).
+         */
         post: operations["createEvent"];
         delete?: never;
         options?: never;
@@ -196,7 +211,10 @@ export interface paths {
         /** List venues */
         get: operations["listVenues"];
         put?: never;
-        /** Create a venue */
+        /**
+         * Create a venue (admins only)
+         * @description Venues are shared by every organizer, so only admins can add them (`403` otherwise).
+         */
         post: operations["createVenue"];
         delete?: never;
         options?: never;
@@ -259,6 +277,11 @@ export interface components {
             token: string;
             /** @enum {string} */
             token_type: "Bearer";
+            /**
+             * Format: date-time
+             * @description When the token stops working (a week after issue by default; null if tokens never expire). Log in again after that.
+             */
+            expires_at: string | null;
             user: components["schemas"]["User"];
         };
         User: {
@@ -305,6 +328,11 @@ export interface components {
             created_at: string;
             /** Format: date-time */
             updated_at: string;
+            /**
+             * Format: date-time
+             * @description Set only on tombstones in the `updated_since` change feed.
+             */
+            deleted_at: string | null;
             links: {
                 /** Format: uri */
                 self: string;
@@ -369,6 +397,13 @@ export interface components {
             prev: string | null;
             /** Format: uri */
             next: string | null;
+        };
+        CursorPaginationMeta: {
+            path: string;
+            per_page: number;
+            /** @description Null on the last page. */
+            next_cursor: string | null;
+            prev_cursor: string | null;
         };
         PaginationMeta: {
             current_page: number;
@@ -629,7 +664,14 @@ export interface operations {
                 has_spots?: "true" | "false" | "1" | "0";
                 /** @description Sort key; prefix with `-` for descending. */
                 sort?: "starts_at" | "-starts_at" | "title" | "-title" | "created_at" | "-created_at";
+                /** @description Change feed: events changed at or after this instant, deletions included. */
+                updated_since?: string;
+                /** @description `cursor` for cursor pagination. Implied by `cursor` and `updated_since`. */
+                pagination?: "offset" | "cursor";
+                /** @description Opaque cursor from `meta.next_cursor` or `meta.prev_cursor`. */
+                cursor?: string;
                 page?: number;
+                /** @description Defaults to 50 in the change feed. */
                 per_page?: number;
             };
             header?: never;
@@ -648,7 +690,7 @@ export interface operations {
                     "application/json": {
                         data: components["schemas"]["Event"][];
                         links: components["schemas"]["PaginationLinks"];
-                        meta: components["schemas"]["PaginationMeta"];
+                        meta: components["schemas"]["PaginationMeta"] | components["schemas"]["CursorPaginationMeta"];
                     };
                 };
             };
@@ -661,7 +703,10 @@ export interface operations {
     createEvent: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Any unique string per logical request, e.g. a UUID. Scoped to the caller. */
+                "Idempotency-Key"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -676,6 +721,8 @@ export interface operations {
                 headers: {
                     /** @description URL of the new event. */
                     Location?: string;
+                    /** @description `true` when this is the stored response to an earlier request with the same Idempotency-Key. */
+                    "Idempotent-Replayed"?: "true";
                     [name: string]: unknown;
                 };
                 content: {
@@ -685,6 +732,7 @@ export interface operations {
                 };
             };
             401: components["responses"]["Unauthenticated"];
+            409: components["responses"]["Conflict"];
             422: components["responses"]["ValidationFailed"];
             429: components["responses"]["TooManyRequests"];
             500: components["responses"]["ServerError"];
@@ -945,6 +993,7 @@ export interface operations {
                 };
             };
             401: components["responses"]["Unauthenticated"];
+            403: components["responses"]["Forbidden"];
             422: components["responses"]["ValidationFailed"];
             429: components["responses"]["TooManyRequests"];
             500: components["responses"]["ServerError"];

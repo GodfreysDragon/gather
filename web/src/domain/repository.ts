@@ -9,7 +9,11 @@ export interface EventsRepository {
   listEvents(filters: EventFilters, page: number, perPage?: number): Promise<Page<EventItem>>
   /** Resolves to null if the event doesn't exist or isn't visible to the viewer. */
   getEvent(id: number): Promise<EventItem | null>
-  createEvent(input: EventInput): Promise<EventItem>
+  /**
+   * `idempotencyKey` makes a retry safe: the REST API replays the first result instead
+   * of creating a second event. The GraphQL API has no equivalent and ignores it.
+   */
+  createEvent(input: EventInput, options?: { idempotencyKey?: string }): Promise<EventItem>
   updateEvent(id: number, input: Partial<EventInput>): Promise<EventItem>
   deleteEvent(id: number): Promise<void>
 

@@ -25,6 +25,17 @@ type Query {
         sort: EventSort = STARTS_AT_ASC
     ): [Event!]! @paginate(defaultCount: 12, maxCount: 50, builder: "App\\GraphQL\\Queries\\Events")
 
+    """
+    Events changed at or after `updatedSince`, oldest change first, like
+    GET /api/v1/events?updated_since=. Deleted events are included with `deletedAt` set.
+    Pass `nextCursor` as `after` to continue.
+    """
+    eventChanges(
+        updatedSince: DateTime!
+        first: Int = 50 @rules(apply: ["min:1", "max:50"])
+        after: String
+    ): EventChangePage! @field(resolver: "App\\GraphQL\\Queries\\EventChanges")
+
     "A single event, or null if it doesn't exist or isn't visible to the viewer."
     event(id: ID!): Event @field(resolver: "App\\GraphQL\\Queries\\EventById")
 
@@ -68,6 +79,16 @@ type Event {
     attendees: [Registration!]! @canRoot(ability: "viewAttendees") @hasMany(relation: "registrations", type: PAGINATOR, defaultCount: 25, maxCount: 100)
     createdAt: DateTime! @rename(attribute: "created_at")
     updatedAt: DateTime! @rename(attribute: "updated_at")
+    "Set only on tombstones in `eventChanges`."
+    deletedAt: DateTime @rename(attribute: "deleted_at")
+}
+
+"A page of the event change feed."
+type EventChangePage {
+    data: [Event!]!
+    "Pass as `after` for the next page; null on the last page."
+    nextCursor: String
+    hasMore: Boolean!
 }
 
 enum EventStatus {

@@ -25,6 +25,8 @@ class DatabaseSeeder extends Seeder
         fake()->seed(2026);
 
         $demo = User::factory()->create(['name' => 'Demo User', 'email' => 'demo@gather.test']);
+        // Only admins can add venues.
+        User::factory()->admin()->create(['name' => 'Admin', 'email' => 'admin@gather.test']);
         $organizers = User::factory(4)->create();
         $attendees = User::factory(40)->create();
 

@@ -78,7 +78,8 @@ cp .env.example .env             # VITE_API_URL=http://localhost:8000
 npm run dev
 ```
 
-Log in as **`demo@gather.test` / `password`**. The demo data is the same on every seed.
+Log in as **`demo@gather.test` / `password`**, or as **`admin@gather.test` / `password`** to create venues. The demo
+data is the same on every seed.
 
 The two run on different origins on purpose. If you change either port, keep `VITE_API_URL` (web) and
 `CORS_ALLOWED_ORIGINS` (api) in sync.
@@ -122,6 +123,11 @@ A test asserts that REST and GraphQL return the **same events in the same order*
 
 ### API design details
 - **Versioned** under `/api/v1`, with consistent `{ "data": … }` envelopes and pagination `links` and `meta`.
+- **Page numbers or cursors**: `GET /events` pages by number by default; `pagination=cursor` switches to keyset
+  cursors, which stay correct while events are added.
+- **A change feed for sync clients**: `GET /events?updated_since=…` returns everything changed since then, oldest
+  first, always cursor-paginated so a client can resume where it stopped. Deleted events are soft-deleted and show up
+  as tombstones (`deleted_at` set), so clients learn about deletions too. GraphQL has the same feed as `eventChanges`.
 - **RFC 9457 problem details** (`application/problem+json`) for every error: 401, 403, 404, 409, 422 (with per-field
   `errors`), 429 and 500. Business errors have stable `type` URIs, such as `/problems/event-full` and
   `/problems/capacity-conflict`.
@@ -130,16 +136,23 @@ A test asserts that REST and GraphQL return the **same events in the same order*
   - `DELETE` can be retried safely;
   - the last spot is protected by a lock on the event row, and duplicate concurrent requests resolve to the same
     registration.
+- **Retry-safe creates**: `POST /events` accepts an `Idempotency-Key` header. A repeat with the same key and body
+  replays the first response (`Idempotent-Replayed: true`) instead of creating a second event; the same key with a
+  different body is a 422, and a duplicate of a request still running is a 409. The SPA sends one key per attempt, so
+  a double click or a retry after a dropped connection creates one event.
 - **Business rules hold through every path:**
   - capacity can't drop below the current registrations;
   - an event's capacity must fit its venue, also after a venue change;
   - an event people registered for can't go back to draft.
 - **Conditional GETs**: weak `ETag` and `If-None-Match` → `304`.
 - **Rate limiting**: 120 requests/min per user or IP, and 10/min on the auth endpoints, keyed on IP + e-mail.
-- **Stateless bearer tokens** (Sanctum personal access tokens). There are no cookies, so any client on any origin
-  works the same way. CORS lists only the SPA's origin and exposes `ETag`, `Location` and `Retry-After`.
+- **Stateless bearer tokens** (Sanctum personal access tokens) that expire after a week (`expires_at` in the login
+  response). There are no cookies, so any client on any origin works the same way. CORS lists only the SPA's origin
+  and exposes `ETag`, `Location`, `Retry-After` and `Idempotent-Replayed`.
+- **Roles where data is shared**: only admins can add venues, since every organizer uses them.
 - **No existence leaks**:
   - someone else's draft is a 404, never a 403, for reads and writes alike;
+  - a failed login looks and takes the same whether or not the e-mail has an account;
   - e-mail addresses appear only on your own profile;
   - attendee lists are organizer-only.
 - **UTC everywhere**: input must carry an offset, and output is always `…Z`.
@@ -179,8 +192,8 @@ A test asserts that REST and GraphQL return the **same events in the same order*
 
 | Suite | Command | What it covers |
 |---|---|---|
-| API feature tests | `cd api && php artisan test` | 65 tests: auth, listing/filtering, CRUD, policies, registration rules, problem documents, ETags, rate limits, N+1, GraphQL queries/mutations/errors/limits, REST↔GraphQL parity, docs pages. Every REST request and response is validated against `openapi.yaml`. |
-| SPA unit tests | `cd web && npx vitest run` | 41 tests: error normalisation for both transports, REST and GraphQL mappers producing identical UI models, stale-response handling, session expiry, form validation and focus, components |
+| API feature tests | `cd api && php artisan test` | 78 tests: auth and token expiry, listing/filtering, cursor pagination and the change feed, CRUD, policies, registration rules, idempotent creates, problem documents, ETags, rate limits, N+1, GraphQL queries/mutations/errors/limits, REST↔GraphQL parity, docs pages. Every REST request and response is validated against `openapi.yaml`. |
+| SPA unit tests | `cd web && npx vitest run` | 43 tests: error normalisation for both transports, REST and GraphQL mappers producing identical UI models, stale-response handling, session expiry, idempotency keys, form validation and focus, components |
 | Type check / lint | `cd web && npm run type-check && npm run lint:check` | Including the generated REST and GraphQL types |
 | End-to-end | `cd web && E2E_URL=http://localhost:5173 npm run test:e2e` | 13 checks in headless Chromium against the real API, through **both** transports: listing, filters, login, `event_full` rejection, register/cancel, server-side validation, create, "My events", phone layout, no console errors. `npm run test:e2e -- --dark` repeats it in dark mode. Needs both servers running on a freshly seeded database. |
 
@@ -207,14 +220,13 @@ curl -s localhost:8000/graphql -H 'Content-Type: application/json' -H "Authoriza
 ## Design notes
 
 [`docs/DECISIONS.md`](docs/DECISIONS.md) covers why the project is built this way, the bugs the contract and
-end-to-end tests caught during development, and the trade-offs it deliberately leaves open (token lifetime, venue
-permissions, account enumeration).
+end-to-end tests caught during development, and the trade-offs it still leaves open.
 
 ## What's next
 
-1. Cursor pagination for the event list, plus a `GET /events?updated_since=` feed for sync clients.
-2. `Idempotency-Key` support for `POST /events`.
-3. A production deployment: PostgreSQL, token expiry, and the SPA on a CDN.
+1. A production deployment: PostgreSQL, the API on a container host, and the SPA on a CDN.
+2. E-mail verification, which would also let registration stop revealing whether an address is taken.
+3. Refresh tokens, so a week-long session can be extended without logging in again.
 
 ## License
 

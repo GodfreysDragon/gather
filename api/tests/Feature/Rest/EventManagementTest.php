@@ -130,7 +130,8 @@ class EventManagementTest extends TestCase
 
         $this->deleteJson("/api/v1/events/{$event->id}")->assertNoContent();
 
-        $this->assertModelMissing($event);
+        $this->assertSoftDeleted($event);
+        $this->getJson("/api/v1/events/{$event->id}")->assertNotFound();
     }
 
     public function test_an_event_with_registrations_must_be_cancelled_instead_of_deleted(): void
@@ -155,9 +156,14 @@ class EventManagementTest extends TestCase
 
         $this->getJson('/api/v1/venues?city=Berlin')->assertOk()->assertJsonCount(1, 'data');
 
-        Sanctum::actingAs(User::factory()->create());
+        $venue = ['name' => 'Loft', 'address' => '1 Main St', 'city' => 'Austin', 'capacity' => 80];
 
-        $this->postJson('/api/v1/venues', ['name' => 'Loft', 'address' => '1 Main St', 'city' => 'Austin', 'capacity' => 80])
+        // Venues are shared, so only admins may add them.
+        Sanctum::actingAs(User::factory()->create());
+        $this->postJson('/api/v1/venues', $venue)->assertForbidden();
+
+        Sanctum::actingAs(User::factory()->admin()->create());
+        $this->postJson('/api/v1/venues', $venue)
             ->assertCreated()
             ->assertJsonPath('data.city', 'Austin');
     }

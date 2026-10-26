@@ -28,7 +28,8 @@ Route::prefix('v1')->name('v1.')->group(function () {
         Route::get('me', [MeController::class, 'show'])->name('me.show');
         Route::get('me/registrations', [MeController::class, 'registrations'])->name('me.registrations');
 
-        Route::post('events', [EventController::class, 'store'])->name('events.store');
+        // Safe to retry: send an Idempotency-Key header and a repeat creates nothing new.
+        Route::post('events', [EventController::class, 'store'])->middleware('idempotent')->name('events.store');
         Route::patch('events/{event}', [EventController::class, 'update'])->name('events.update');
         Route::delete('events/{event}', [EventController::class, 'destroy'])->name('events.destroy');
         Route::get('events/{event}/attendees', [AttendeeController::class, 'index'])->name('events.attendees.index');

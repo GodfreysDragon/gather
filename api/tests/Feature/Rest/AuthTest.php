@@ -111,4 +111,32 @@ class AuthTest extends TestCase
 
         $this->postJson('/api/v1/auth/login', ['email' => 'ADA@example.com', 'password' => 'correct-horse'])->assertOk();
     }
+
+    public function test_tokens_expire_after_a_week(): void
+    {
+        User::factory()->create(['email' => 'ada@example.com']);
+
+        $response = $this->postJson('/api/v1/auth/login', ['email' => 'ada@example.com', 'password' => 'password'])
+            ->assertOk()
+            ->assertJsonPath('expires_at', now()->addWeek()->utc()->toIso8601ZuluString());
+        $headers = ['Authorization' => 'Bearer '.$response->json('token')];
+
+        $this->travel(6)->days();
+        $this->getJson('/api/v1/me', $headers)->assertOk();
+
+        $this->travel(2)->days();
+        $this->app['auth']->forgetGuards();
+        $this->getJson('/api/v1/me', $headers)->assertUnauthorized();
+    }
+
+    public function test_an_unknown_email_fails_exactly_like_a_wrong_password(): void
+    {
+        User::factory()->create(['email' => 'ada@example.com']);
+
+        $wrongPassword = $this->postJson('/api/v1/auth/login', ['email' => 'ada@example.com', 'password' => 'nope']);
+        $unknownEmail = $this->postJson('/api/v1/auth/login', ['email' => 'nobody@example.com', 'password' => 'nope']);
+
+        $unknownEmail->assertUnprocessable();
+        $this->assertSame($wrongPassword->json(), $unknownEmail->json());
+    }
 }

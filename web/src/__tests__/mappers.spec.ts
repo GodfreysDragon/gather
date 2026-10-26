@@ -24,6 +24,7 @@ const restEvent: components['schemas']['Event'] = {
   organizer: { id: 9, name: 'Ada' },
   created_at: '2026-10-01T09:00:00Z',
   updated_at: '2026-10-01T09:00:00Z',
+  deleted_at: null,
   links: {
     self: 'http://localhost:8000/api/v1/events/7',
     registration: 'http://localhost:8000/api/v1/events/7/registration',

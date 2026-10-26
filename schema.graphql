@@ -25,6 +25,10 @@ type Event {
 
   capacity: Int!
   createdAt: DateTime!
+
+  "Set only on tombstones in `eventChanges`."
+  deletedAt: DateTime
+
   description: String!
   endsAt: DateTime!
   id: ID!
@@ -38,6 +42,15 @@ type Event {
   venue: Venue!
   viewerIsOrganizer: Boolean!
   viewerIsRegistered: Boolean!
+}
+
+"A page of the event change feed."
+type EventChangePage {
+  data: [Event!]!
+  hasMore: Boolean!
+
+  "Pass as `after` for the next page; null on the last page."
+  nextCursor: String
 }
 
 "A paginated list of Event items."
@@ -143,6 +156,13 @@ type PaginatorInfo {
 type Query {
   "A single event, or null if it doesn't exist or isn't visible to the viewer."
   event(id: ID!): Event
+
+  """
+  Events changed at or after `updatedSince`, oldest change first, like
+  GET /api/v1/events?updated_since=. Deleted events are included with `deletedAt` set.
+  Pass `nextCursor` as `after` to continue.
+  """
+  eventChanges(after: String, first: Int = 50, updatedSince: DateTime!): EventChangePage!
 
   "Events visible to the viewer. Filters behave exactly like GET /api/v1/events."
   events(

@@ -79,11 +79,17 @@ export const restRepository: EventsRepository = {
       }),
     )
 
+    // The UI pages by number, so it never asks for cursor pagination.
+    const meta = body.meta
+    if (!('current_page' in meta)) {
+      throw new ApiError('invalid_response', 'Expected page-number pagination from GET /events.')
+    }
+
     return {
       items: body.data.map(fromRestEvent),
-      page: body.meta.current_page,
-      lastPage: body.meta.last_page,
-      total: body.meta.total,
+      page: meta.current_page,
+      lastPage: meta.last_page,
+      total: meta.total,
     }
   },
 
@@ -97,9 +103,10 @@ export const restRepository: EventsRepository = {
     }
   },
 
-  async createEvent(input) {
+  async createEvent(input, options) {
     const body = await unwrap(
       rest.POST('/events', {
+        params: { header: { 'Idempotency-Key': options?.idempotencyKey } },
         body: {
           venue_id: input.venueId,
           title: input.title,

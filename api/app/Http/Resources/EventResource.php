@@ -38,6 +38,8 @@ class EventResource extends JsonResource
             'organizer' => new UserResource($this->whenLoaded('organizer')),
             'created_at' => $this->created_at->utc()->toIso8601ZuluString(),
             'updated_at' => $this->updated_at->utc()->toIso8601ZuluString(),
+            // Only ever set in the updated_since feed, where deleted events appear as tombstones.
+            'deleted_at' => $this->deleted_at?->utc()->toIso8601ZuluString(),
             'links' => [
                 'self' => route('v1.events.show', $this->resource),
                 'registration' => route('v1.events.registration.update', $this->resource),

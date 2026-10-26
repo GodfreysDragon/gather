@@ -47,7 +47,8 @@ return [
     |
     */
 
-    'expiration' => null,
+    // Tokens last a week (in minutes); the SPA sends the user back to log in after that.
+    'expiration' => (int) env('SANCTUM_EXPIRATION', 60 * 24 * 7),
 
     /*
     |--------------------------------------------------------------------------
