@@ -21,14 +21,16 @@ class EventController extends Controller
     {
         $viewer = $request->user('sanctum');
 
-        $events = Event::query()
+        $query = Event::query()
             ->with(['venue', 'organizer'])
             ->withApiCounts($viewer)
-            ->filter($request->filters(), $viewer)
-            ->paginate($request->integer('per_page', 12))
-            ->withQueryString();
+            ->filter($request->filters(), $viewer);
 
-        return EventResource::collection($events);
+        $events = $request->usesCursor()
+            ? $query->cursorPaginate($request->integer('per_page', $request->has('updated_since') ? 50 : 12))
+            : $query->paginate($request->integer('per_page', 12));
+
+        return EventResource::collection($events->withQueryString());
     }
 
     public function store(Request $request, CreateEvent $createEvent): JsonResponse

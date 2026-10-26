@@ -100,6 +100,14 @@ export interface paths {
          * List events
          * @description Published and cancelled events, plus drafts organized by the caller.
          *     Filters are combined with AND.
+         *
+         *     **Pagination.** Page numbers by default. Pass `pagination=cursor` for cursor pagination
+         *     instead, then follow `links.next` (or pass `meta.next_cursor` as `cursor`).
+         *
+         *     **Change feed.** `updated_since` returns every event changed at or after that instant,
+         *     oldest change first and always cursor-paginated, so sync clients can resume where they
+         *     stopped. Deleted events appear as tombstones: the usual representation with `deleted_at`
+         *     set. It can't be combined with `sort`.
          */
         get: operations["listEvents"];
         put?: never;
@@ -305,6 +313,11 @@ export interface components {
             created_at: string;
             /** Format: date-time */
             updated_at: string;
+            /**
+             * Format: date-time
+             * @description Set only on tombstones in the `updated_since` change feed.
+             */
+            deleted_at: string | null;
             links: {
                 /** Format: uri */
                 self: string;
@@ -369,6 +382,13 @@ export interface components {
             prev: string | null;
             /** Format: uri */
             next: string | null;
+        };
+        CursorPaginationMeta: {
+            path: string;
+            per_page: number;
+            /** @description Null on the last page. */
+            next_cursor: string | null;
+            prev_cursor: string | null;
         };
         PaginationMeta: {
             current_page: number;
@@ -629,7 +649,14 @@ export interface operations {
                 has_spots?: "true" | "false" | "1" | "0";
                 /** @description Sort key; prefix with `-` for descending. */
                 sort?: "starts_at" | "-starts_at" | "title" | "-title" | "created_at" | "-created_at";
+                /** @description Change feed: events changed at or after this instant, deletions included. */
+                updated_since?: string;
+                /** @description `cursor` for cursor pagination. Implied by `cursor` and `updated_since`. */
+                pagination?: "offset" | "cursor";
+                /** @description Opaque cursor from `meta.next_cursor` or `meta.prev_cursor`. */
+                cursor?: string;
                 page?: number;
+                /** @description Defaults to 50 in the change feed. */
                 per_page?: number;
             };
             header?: never;
@@ -648,7 +675,7 @@ export interface operations {
                     "application/json": {
                         data: components["schemas"]["Event"][];
                         links: components["schemas"]["PaginationLinks"];
-                        meta: components["schemas"]["PaginationMeta"];
+                        meta: components["schemas"]["PaginationMeta"] | components["schemas"]["CursorPaginationMeta"];
                     };
                 };
             };

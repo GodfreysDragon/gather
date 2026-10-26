@@ -13,12 +13,13 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 #[Fillable(['venue_id', 'title', 'description', 'starts_at', 'ends_at', 'capacity', 'status'])]
 class Event extends Model
 {
     /** @use HasFactory<EventFactory> */
-    use HasFactory;
+    use HasFactory, SoftDeletes;
 
     /**
      * Sort keys accepted by `sort` (prefix with "-" for descending).
@@ -111,8 +112,12 @@ class Event extends Model
      * Apply the listing filters. The REST controller and the GraphQL `events` field
      * both call this, so the two APIs can never disagree about what a filter means.
      *
+     * `updated_since` turns the listing into a change feed: everything changed at or after
+     * that instant, oldest change first, including deleted events as tombstones.
+     *
      * @param  array{q?: ?string, city?: ?string, from?: ?string, to?: ?string, venue_id?: int|string|null,
-     *               organizer_id?: int|string|null, status?: ?string, has_spots?: ?bool, sort?: ?string}  $filters
+     *               organizer_id?: int|string|null, status?: ?string, has_spots?: ?bool, sort?: ?string,
+     *               updated_since?: ?string}  $filters
      */
     #[Scope]
     protected function filter(Builder $query, array $filters, ?User $viewer = null): void
@@ -145,6 +150,15 @@ class Event extends Model
             ->where('status', '!=', EventStatus::Draft->value)
             ->when($viewer, fn (Builder $q) => $q->orWhere('organizer_id', $viewer->id)));
 
+        if ($since = $filters['updated_since'] ?? null) {
+            $query->withTrashed()
+                ->where('updated_at', '>=', CarbonImmutable::parse($since)->utc())
+                ->orderBy('updated_at')
+                ->orderBy('id');
+
+            return;
+        }
+
         $sort = $filters['sort'] ?? 'starts_at';
         $column = ltrim($sort, '-');
 
@@ -161,6 +175,7 @@ class Event extends Model
             'ends_at' => 'immutable_datetime',
             'capacity' => 'integer',
             'status' => EventStatus::class,
+            'deleted_at' => 'immutable_datetime',
         ];
     }
 }

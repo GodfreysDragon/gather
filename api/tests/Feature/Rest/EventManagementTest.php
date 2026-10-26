@@ -130,7 +130,8 @@ class EventManagementTest extends TestCase
 
         $this->deleteJson("/api/v1/events/{$event->id}")->assertNoContent();
 
-        $this->assertModelMissing($event);
+        $this->assertSoftDeleted($event);
+        $this->getJson("/api/v1/events/{$event->id}")->assertNotFound();
     }
 
     public function test_an_event_with_registrations_must_be_cancelled_instead_of_deleted(): void
