@@ -1,23 +1,10 @@
 import { graphql } from '@/api/graphql'
+import type * as Gql from '@/api/graphql.generated'
 import type { EventsRepository } from './repository'
-import type { EventInput, EventItem, EventSort, EventStatus, Venue } from './types'
+import type { EventInput, EventItem, EventSort, EventStatus } from './types'
 
-/** The shape selected by EVENT_FIELDS below. */
-export interface GraphQLEvent {
-  id: string
-  title: string
-  description: string
-  startsAt: string
-  endsAt: string
-  status: 'DRAFT' | 'PUBLISHED' | 'CANCELLED'
-  capacity: number
-  registrationCount: number
-  spotsLeft: number
-  viewerIsRegistered: boolean
-  viewerIsOrganizer: boolean
-  venue: { id: string; name: string; address: string; city: string; capacity: number }
-  organizer: { id: string; name: string }
-}
+/** The shape selected by EVENT_FIELDS below, generated from the API's schema. */
+export type GraphQLEvent = Gql.EventFieldsFragment
 
 const EVENT_FIELDS = /* GraphQL */ `
   fragment EventFields on Event {
@@ -46,13 +33,25 @@ const EVENT_FIELDS = /* GraphQL */ `
   }
 `
 
-const SORTS: Record<EventSort, string> = {
+const SORTS: Record<EventSort, Gql.EventSort> = {
   starts_at: 'STARTS_AT_ASC',
   '-starts_at': 'STARTS_AT_DESC',
   title: 'TITLE_ASC',
   '-title': 'TITLE_DESC',
   created_at: 'CREATED_AT_ASC',
   '-created_at': 'CREATED_AT_DESC',
+}
+
+const STATUSES: Record<Gql.EventStatus, EventStatus> = {
+  DRAFT: 'draft',
+  PUBLISHED: 'published',
+  CANCELLED: 'cancelled',
+}
+
+const GRAPHQL_STATUSES: Record<EventStatus, Gql.EventStatus> = {
+  draft: 'DRAFT',
+  published: 'PUBLISHED',
+  cancelled: 'CANCELLED',
 }
 
 export function fromGraphQLEvent(event: GraphQLEvent): EventItem {
@@ -62,7 +61,7 @@ export function fromGraphQLEvent(event: GraphQLEvent): EventItem {
     description: event.description,
     startsAt: new Date(event.startsAt),
     endsAt: new Date(event.endsAt),
-    status: event.status.toLowerCase() as EventStatus,
+    status: STATUSES[event.status],
     capacity: event.capacity,
     registrationCount: event.registrationCount,
     spotsLeft: event.spotsLeft,
@@ -72,17 +71,29 @@ export function fromGraphQLEvent(event: GraphQLEvent): EventItem {
   }
 }
 
-function toGraphQLInput(input: Partial<EventInput>): Record<string, unknown> {
-  const out: Record<string, unknown> = {
+function toUpdateInput(input: Partial<EventInput>): Gql.UpdateEventInput {
+  const out: Gql.UpdateEventInput = {
     venueId: input.venueId,
     title: input.title,
     description: input.description,
     startsAt: input.startsAt?.toISOString(),
     endsAt: input.endsAt?.toISOString(),
     capacity: input.capacity,
-    status: input.status?.toUpperCase(),
+    status: input.status && GRAPHQL_STATUSES[input.status],
   }
   return Object.fromEntries(Object.entries(out).filter(([, value]) => value !== undefined))
+}
+
+function toCreateInput(input: EventInput): Gql.CreateEventInput {
+  return {
+    venueId: input.venueId,
+    title: input.title,
+    description: input.description,
+    startsAt: input.startsAt.toISOString(),
+    endsAt: input.endsAt.toISOString(),
+    capacity: input.capacity,
+    status: GRAPHQL_STATUSES[input.status],
+  }
 }
 
 /**
@@ -92,13 +103,8 @@ function toGraphQLInput(input: Partial<EventInput>): Record<string, unknown> {
  */
 export const graphqlRepository: EventsRepository = {
   async listEvents(filters, page, perPage = 12) {
-    const data = await graphql<{
-      events: {
-        data: GraphQLEvent[]
-        paginatorInfo: { currentPage: number; lastPage: number; total: number }
-      }
-    }>(
-      `
+    const data = await graphql<Gql.ListEventsQuery, Gql.ListEventsQueryVariables>(
+      /* GraphQL */ `
         query ListEvents(
           $q: String
           $city: String
@@ -152,8 +158,8 @@ export const graphqlRepository: EventsRepository = {
   },
 
   async getEvent(id) {
-    const data = await graphql<{ event: GraphQLEvent | null }>(
-      `
+    const data = await graphql<Gql.GetEventQuery, Gql.GetEventQueryVariables>(
+      /* GraphQL */ `
         query GetEvent($id: ID!) {
           event(id: $id) {
             ...EventFields
@@ -167,8 +173,8 @@ export const graphqlRepository: EventsRepository = {
   },
 
   async createEvent(input) {
-    const data = await graphql<{ createEvent: GraphQLEvent }>(
-      `
+    const data = await graphql<Gql.CreateEventMutation, Gql.CreateEventMutationVariables>(
+      /* GraphQL */ `
         mutation CreateEvent($input: CreateEventInput!) {
           createEvent(input: $input) {
             ...EventFields
@@ -176,14 +182,14 @@ export const graphqlRepository: EventsRepository = {
         }
         ${EVENT_FIELDS}
       `,
-      { input: toGraphQLInput(input) },
+      { input: toCreateInput(input) },
     )
     return fromGraphQLEvent(data.createEvent)
   },
 
   async updateEvent(id, input) {
-    const data = await graphql<{ updateEvent: GraphQLEvent }>(
-      `
+    const data = await graphql<Gql.UpdateEventMutation, Gql.UpdateEventMutationVariables>(
+      /* GraphQL */ `
         mutation UpdateEvent($id: ID!, $input: UpdateEventInput!) {
           updateEvent(id: $id, input: $input) {
             ...EventFields
@@ -191,14 +197,14 @@ export const graphqlRepository: EventsRepository = {
         }
         ${EVENT_FIELDS}
       `,
-      { id, input: toGraphQLInput(input) },
+      { id, input: toUpdateInput(input) },
     )
     return fromGraphQLEvent(data.updateEvent)
   },
 
   async deleteEvent(id) {
-    await graphql(
-      `
+    await graphql<Gql.DeleteEventMutation, Gql.DeleteEventMutationVariables>(
+      /* GraphQL */ `
         mutation DeleteEvent($id: ID!) {
           deleteEvent(id: $id)
         }
@@ -208,8 +214,8 @@ export const graphqlRepository: EventsRepository = {
   },
 
   async register(eventId) {
-    const data = await graphql<{ registerForEvent: { event: GraphQLEvent } }>(
-      `
+    const data = await graphql<Gql.RegisterForEventMutation, Gql.RegisterForEventMutationVariables>(
+      /* GraphQL */ `
         mutation RegisterForEvent($id: ID!) {
           registerForEvent(eventId: $id) {
             created
@@ -226,8 +232,11 @@ export const graphqlRepository: EventsRepository = {
   },
 
   async cancelRegistration(eventId) {
-    const data = await graphql<{ cancelRegistration: GraphQLEvent }>(
-      `
+    const data = await graphql<
+      Gql.CancelRegistrationMutation,
+      Gql.CancelRegistrationMutationVariables
+    >(
+      /* GraphQL */ `
         mutation CancelRegistration($id: ID!) {
           cancelRegistration(eventId: $id) {
             ...EventFields
@@ -241,12 +250,8 @@ export const graphqlRepository: EventsRepository = {
   },
 
   async listAttendees(eventId) {
-    const data = await graphql<{
-      event: {
-        attendees: { data: { user: { id: string; name: string }; registeredAt: string }[] }
-      } | null
-    }>(
-      `
+    const data = await graphql<Gql.ListAttendeesQuery, Gql.ListAttendeesQueryVariables>(
+      /* GraphQL */ `
         query ListAttendees($id: ID!) {
           event(id: $id) {
             attendees(first: 100) {
@@ -271,9 +276,7 @@ export const graphqlRepository: EventsRepository = {
   },
 
   async myEvents() {
-    const data = await graphql<{
-      me: { registeredEvents: GraphQLEvent[]; organizedEvents: GraphQLEvent[] } | null
-    }>(`
+    const data = await graphql<Gql.MyEventsQuery>(/* GraphQL */ `
       query MyEvents {
         me {
           registeredEvents {
@@ -293,7 +296,7 @@ export const graphqlRepository: EventsRepository = {
   },
 
   async listVenues() {
-    const data = await graphql<{ venues: (Omit<Venue, 'id'> & { id: string })[] }>(`
+    const data = await graphql<Gql.ListVenuesQuery>(/* GraphQL */ `
       query ListVenues {
         venues {
           id

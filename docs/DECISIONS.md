@@ -5,10 +5,11 @@ Why Gather is built the way it is, the bugs its tests caught, and the trade-offs
 ## Decisions
 
 ### Two deployables joined by a written contract
-The API and the SPA are separate projects on separate origins. They share nothing but `openapi.yaml`, so they work the way a backend team and a frontend team would. Keeping the contract honest is automated on both sides:
+The API and the SPA are separate projects on separate origins. They share nothing but two contract files, `openapi.yaml` for REST and `schema.graphql` for GraphQL, so they work the way a backend team and a frontend team would. Keeping the contract honest is automated on both sides:
 
 - **API:** `tests/TestCase.php` overrides `json()`. Every REST call in the PHPUnit suite is validated against the spec: the response always, and the request whenever the API accepts it. An undocumented status code, a missing field, or input the server accepts but the contract doesn't describe all fail the test.
 - **SPA:** the REST client's types are generated from the same file (`npm run gen:api`). CI regenerates them and fails if the committed `schema.d.ts` is stale.
+- **GraphQL:** the Lighthouse schema is written for the server (directives, resolvers), so the compiled client-facing schema is printed to `schema.graphql` and committed. CI reprints it and fails on any difference, then regenerates the SPA's operation types from it with `graphql-codegen` and fails if they are stale. The hand-written query strings stay as they are; codegen validates them against the schema and types their results and variables.
 
 ### One domain layer, two transports
 REST controllers and GraphQL resolvers are thin adapters over `app/Actions`, `EventPolicy`, the `Event::filter()` scope and the `DomainException` hierarchy. A test asserts that both APIs return the same events in the same order for the same filters. Validation rules live in the actions rather than in FormRequests, so GraphQL gets them too. The GraphQL layer only renames error keys (`starts_at` → `input.startsAt`).

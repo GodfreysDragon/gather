@@ -11,7 +11,14 @@ Route::get('/', fn () => response()->json([
     'rest' => url('/api/v1'),
     'graphql' => url('/graphql'),
     'openapi' => url('/openapi.yaml'),
+    'docs' => url('/docs'),
+    'graphiql' => url('/graphiql'),
 ]));
+
+// Human-friendly views of the two contracts: an interactive REST reference rendered
+// from openapi.yaml, and a GraphQL playground against /graphql.
+Route::view('/docs', 'docs')->name('docs');
+Route::view('/graphiql', 'graphiql')->name('graphiql');
 
 Route::get('/openapi.yaml', fn () => response()->file(base_path('../openapi.yaml'), [
     'Content-Type' => 'application/yaml',
