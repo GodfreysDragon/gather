@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Middleware\AddETag;
+use App\Http\Middleware\Idempotent;
 use App\Http\Problem;
 use Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse;
 use Illuminate\Cookie\Middleware\EncryptCookies;
@@ -32,6 +33,7 @@ return Application::configure(basePath: dirname(__DIR__))
             PreventRequestForgery::class,
         ]);
         $middleware->api(append: [AddETag::class]);
+        $middleware->alias(['idempotent' => Idempotent::class]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(

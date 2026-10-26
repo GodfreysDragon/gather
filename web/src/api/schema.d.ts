@@ -111,7 +111,14 @@ export interface paths {
          */
         get: operations["listEvents"];
         put?: never;
-        /** Create an event (you become its organizer) */
+        /**
+         * Create an event (you become its organizer)
+         * @description Safe to retry with an `Idempotency-Key` header: repeating a request with the same key
+         *     and body within 24 hours returns the original response (marked `Idempotent-Replayed: true`)
+         *     instead of creating another event. Reusing a key with a different body is a 422
+         *     (`idempotency-key-reused`); a repeat while the first request is still running is a 409
+         *     (`idempotency-in-progress`).
+         */
         post: operations["createEvent"];
         delete?: never;
         options?: never;
@@ -688,7 +695,10 @@ export interface operations {
     createEvent: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description Any unique string per logical request, e.g. a UUID. Scoped to the caller. */
+                "Idempotency-Key"?: string;
+            };
             path?: never;
             cookie?: never;
         };
@@ -703,6 +713,8 @@ export interface operations {
                 headers: {
                     /** @description URL of the new event. */
                     Location?: string;
+                    /** @description `true` when this is the stored response to an earlier request with the same Idempotency-Key. */
+                    "Idempotent-Replayed"?: "true";
                     [name: string]: unknown;
                 };
                 content: {
@@ -712,6 +724,7 @@ export interface operations {
                 };
             };
             401: components["responses"]["Unauthenticated"];
+            409: components["responses"]["Conflict"];
             422: components["responses"]["ValidationFailed"];
             429: components["responses"]["TooManyRequests"];
             500: components["responses"]["ServerError"];

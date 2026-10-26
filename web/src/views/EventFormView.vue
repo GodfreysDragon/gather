@@ -128,6 +128,13 @@ function clientErrors(): FieldErrors {
   return errors
 }
 
+/**
+ * One key per attempt to create this event, so a double submit or a retry after a
+ * network failure can't create it twice. Any answer from the server ends the attempt:
+ * after a validation error the corrected form is a different request and needs a new key.
+ */
+let idempotencyKey = crypto.randomUUID()
+
 const saving = ref(false)
 const error = ref<ApiError | null>(null)
 const fieldError = (field: keyof EventInput) => error.value?.fieldErrors[field]?.[0]
@@ -152,7 +159,7 @@ async function submit(): Promise<void> {
   saving.value = true
   try {
     if (props.id === undefined) {
-      const event = await repository.value.createEvent(toInput(form))
+      const event = await repository.value.createEvent(toInput(form), { idempotencyKey })
       await router.push({ name: 'event', params: { id: event.id } })
       return
     }
@@ -162,6 +169,7 @@ async function submit(): Promise<void> {
     await router.push(detailRoute.value)
   } catch (e) {
     error.value = toApiError(e)
+    if (error.value.code !== 'network_error') idempotencyKey = crypto.randomUUID()
     if (error.value.isValidation) void focusFirstInvalid(formEl.value)
   } finally {
     saving.value = false

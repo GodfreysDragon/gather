@@ -215,6 +215,18 @@ paths:
       tags: [Events]
       operationId: createEvent
       summary: Create an event (you become its organizer)
+      description: |
+        Safe to retry with an `Idempotency-Key` header: repeating a request with the same key
+        and body within 24 hours returns the original response (marked `Idempotent-Replayed: true`)
+        instead of creating another event. Reusing a key with a different body is a 422
+        (`idempotency-key-reused`); a repeat while the first request is still running is a 409
+        (`idempotency-in-progress`).
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: false
+          description: Any unique string per logical request, e.g. a UUID. Scoped to the caller.
+          schema: { type: string, minLength: 1, maxLength: 255 }
       requestBody:
         required: true
         content:
@@ -227,6 +239,9 @@ paths:
             Location:
               description: URL of the new event.
               schema: { type: string, format: uri }
+            Idempotent-Replayed:
+              description: '`true` when this is the stored response to an earlier request with the same Idempotency-Key.'
+              schema: { type: string, enum: ['true'] }
           content:
             application/json:
               schema:
@@ -235,6 +250,7 @@ paths:
                 properties:
                   data: { $ref: '#/components/schemas/Event' }
         '401': { $ref: '#/components/responses/Unauthenticated' }
+        '409': { $ref: '#/components/responses/Conflict' }
         '422': { $ref: '#/components/responses/ValidationFailed' }
         '429': { $ref: '#/components/responses/TooManyRequests' }
         '500': { $ref: '#/components/responses/ServerError' }

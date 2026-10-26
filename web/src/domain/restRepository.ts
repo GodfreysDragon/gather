@@ -103,9 +103,10 @@ export const restRepository: EventsRepository = {
     }
   },
 
-  async createEvent(input) {
+  async createEvent(input, options) {
     const body = await unwrap(
       rest.POST('/events', {
+        params: { header: { 'Idempotency-Key': options?.idempotencyKey } },
         body: {
           venue_id: input.venueId,
           title: input.title,
