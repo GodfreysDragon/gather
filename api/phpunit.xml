@@ -23,6 +23,8 @@
         <env name="DB_CONNECTION" value="sqlite"/>
         <env name="DB_DATABASE" value=":memory:"/>
         <env name="DB_URL" value=""/>
+        <!-- Always test the schema in graphql/, never a cached copy from an earlier run. -->
+        <env name="LIGHTHOUSE_SCHEMA_CACHE_ENABLE" value="false"/>
         <env name="MAIL_MAILER" value="array"/>
         <env name="QUEUE_CONNECTION" value="sync"/>
         <env name="SESSION_DRIVER" value="array"/>

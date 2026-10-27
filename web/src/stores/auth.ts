@@ -3,13 +3,23 @@ import { computed, ref } from 'vue'
 import { ApiError } from '@/api/errors'
 import { rest, unwrap } from '@/api/rest'
 import type { components } from '@/api/schema'
-import { getToken, setToken } from '@/api/token'
+import { clearTokens, getToken, setTokens } from '@/api/token'
 
 type User = components['schemas']['User']
+type TokenResponse = components['schemas']['TokenResponse']
+
+/** The query parameters of the link in a confirmation e-mail. */
+export interface VerificationLink {
+  id: number
+  hash: string
+  expires: number
+  signature: string
+}
 
 /**
  * Authentication always goes through REST: it's where tokens are issued. The same
- * bearer token then authorises both REST and GraphQL requests.
+ * bearer token then authorises both REST and GraphQL requests, and both clients
+ * refresh it transparently when it expires.
  */
 export const useAuthStore = defineStore('auth', () => {
   const user = ref<User | null>(null)
@@ -42,26 +52,48 @@ export const useAuthStore = defineStore('auth', () => {
     return restoring
   }
 
-  /** Forgets the token and user locally, e.g. after the API rejected the token. */
+  /** Forgets the tokens and user locally, e.g. after the API rejected the token. */
   function clearSession(): void {
-    setToken(null)
+    clearTokens()
     user.value = null
   }
 
-  async function login(email: string, password: string): Promise<void> {
-    const body = await unwrap(
-      rest.POST('/auth/login', { body: { email, password, device_name: 'web' } }),
-    )
-    setToken(body.token)
-    user.value = body.user
+  function startSession(response: TokenResponse): void {
+    setTokens(response)
+    user.value = response.user
   }
 
-  async function register(name: string, email: string, password: string): Promise<void> {
-    const body = await unwrap(
-      rest.POST('/auth/register', { body: { name, email, password, device_name: 'web' } }),
+  async function login(email: string, password: string): Promise<void> {
+    startSession(
+      await unwrap(rest.POST('/auth/login', { body: { email, password, device_name: 'web' } })),
     )
-    setToken(body.token)
-    user.value = body.user
+  }
+
+  /**
+   * Starts an account. Nothing is logged in yet: the API e-mails a confirmation link,
+   * and resolves to the message to show ("check your inbox").
+   */
+  async function register(name: string, email: string, password: string): Promise<string> {
+    return (await unwrap(rest.POST('/auth/register', { body: { name, email, password } }))).message
+  }
+
+  /** Completes registration from the e-mailed link, which also logs the user in. */
+  async function verifyEmail(link: VerificationLink): Promise<void> {
+    startSession(
+      await unwrap(
+        rest.POST('/auth/email/verify/{id}/{hash}', {
+          params: {
+            path: { id: link.id, hash: link.hash },
+            query: { expires: link.expires, signature: link.signature },
+          },
+          body: { device_name: 'web' },
+        }),
+      ),
+    )
+  }
+
+  async function resendVerification(email: string): Promise<string> {
+    return (await unwrap(rest.POST('/auth/email/resend', { body: { email } }))).message
   }
 
   async function logout(): Promise<void> {
@@ -80,6 +112,8 @@ export const useAuthStore = defineStore('auth', () => {
     clearSession,
     login,
     register,
+    verifyEmail,
+    resendVerification,
     logout,
   }
 })

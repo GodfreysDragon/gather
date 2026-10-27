@@ -9,9 +9,14 @@ info:
     - the backend's test suite validates every REST response it makes against this file;
     - the Vue SPA generates its TypeScript types from this file (`npm run gen:api`).
 
-    **Authentication.** `POST /auth/login` or `POST /auth/register` returns a bearer token.
-    Send it as `Authorization: Bearer <token>`. Read endpoints are public; a token
-    only personalises them (`viewer.is_registered`, drafts you organize).
+    **Authentication.** `POST /auth/register` sends a confirmation e-mail; its link leads to
+    `POST /auth/email/verify/{id}/{hash}`, which confirms the address and returns the first
+    tokens. After that, `POST /auth/login` returns tokens. Send the access token as
+    `Authorization: Bearer <token>`; it lasts an hour, and `POST /auth/refresh` exchanges the
+    single-use refresh token for a new pair. Read endpoints are public; a token only
+    personalises them (`viewer.is_registered`, drafts you organize).
+
+    No endpoint reveals whether an e-mail address has an account.
 
     **Errors.** Every error is an RFC 9457 problem document (`application/problem+json`).
     Business-rule violations have a stable `type` URI ending in a code such as `event-full`.
@@ -42,7 +47,11 @@ paths:
     post:
       tags: [Auth]
       operationId: register
-      summary: Create an account and receive a token
+      summary: Create an account (confirmed by e-mail)
+      description: |
+        Always answers `202` with the same message. A new address gets a confirmation link
+        (valid for an hour); an address that already has an account gets an e-mail saying so
+        instead, so the response never reveals which addresses are registered.
       security: []
       requestBody:
         required: true
@@ -55,13 +64,12 @@ paths:
                 name: { type: string, maxLength: 100 }
                 email: { type: string, format: email }
                 password: { type: string, minLength: 8 }
-                device_name: { type: string, description: 'Label for the token, e.g. "web" or "iPhone".' }
       responses:
-        '201':
-          description: Account created
+        '202':
+          description: Check your inbox
           content:
             application/json:
-              schema: { $ref: '#/components/schemas/TokenResponse' }
+              schema: { $ref: '#/components/schemas/Accepted' }
         '422': { $ref: '#/components/responses/ValidationFailed' }
         '429': { $ref: '#/components/responses/TooManyRequests' }
         '500': { $ref: '#/components/responses/ServerError' }
@@ -82,13 +90,113 @@ paths:
               properties:
                 email: { type: string, format: email }
                 password: { type: string }
-                device_name: { type: string }
+                device_name: { type: string, description: 'Label for the tokens, e.g. "web" or "iPhone".' }
       responses:
         '200':
           description: Authenticated
           content:
             application/json:
               schema: { $ref: '#/components/schemas/TokenResponse' }
+        '403':
+          description: Right password, but the address isn't confirmed yet (`email-not-verified`). Ask for a new link with `POST /auth/email/resend`.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /auth/refresh:
+    post:
+      tags: [Auth]
+      operationId: refreshToken
+      summary: Exchange a refresh token for a new token pair
+      description: |
+        Refresh tokens are single use: each call returns a new pair and retires the old one
+        (and its access token). Presenting an already-used refresh token revokes every token
+        from that login, since it means the token was copied.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refresh_token]
+              properties:
+                refresh_token: { type: string, maxLength: 255 }
+      responses:
+        '200':
+          description: A new token pair
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TokenResponse' }
+        '401': { $ref: '#/components/responses/Unauthenticated' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /auth/email/verify/{id}/{hash}:
+    post:
+      tags: [Auth]
+      operationId: verifyEmail
+      summary: Confirm an e-mail address and log in
+      description: |
+        The confirmation e-mail links to the SPA's `/verify-email` page with these parameters;
+        the SPA posts them here. A tampered or expired link is a `403`; a link for an address
+        that is already confirmed (or no longer matches) is a `410` (`verification-link-invalid`).
+      security: []
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+        - { name: hash, in: path, required: true, schema: { type: string } }
+        - { name: expires, in: query, required: true, schema: { type: integer } }
+        - { name: signature, in: query, required: true, schema: { type: string } }
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                device_name: { type: string, maxLength: 100 }
+      responses:
+        '200':
+          description: Address confirmed; the account's first tokens
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TokenResponse' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '410':
+          description: The link was already used or no longer matches the account.
+          content:
+            application/problem+json:
+              schema: { $ref: '#/components/schemas/Problem' }
+        '422': { $ref: '#/components/responses/ValidationFailed' }
+        '429': { $ref: '#/components/responses/TooManyRequests' }
+        '500': { $ref: '#/components/responses/ServerError' }
+
+  /auth/email/resend:
+    post:
+      tags: [Auth]
+      operationId: resendVerification
+      summary: Send a new confirmation link
+      description: Always answers `202`; an e-mail goes out only if the address has an unconfirmed account.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email: { type: string, format: email }
+      responses:
+        '202':
+          description: Check your inbox
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Accepted' }
         '422': { $ref: '#/components/responses/ValidationFailed' }
         '429': { $ref: '#/components/responses/TooManyRequests' }
         '500': { $ref: '#/components/responses/ServerError' }
@@ -97,7 +205,7 @@ paths:
     post:
       tags: [Auth]
       operationId: logout
-      summary: Revoke the token used for this request
+      summary: Log out (revokes this login's access and refresh tokens)
       responses:
         '204': { description: Token revoked }
         '401': { $ref: '#/components/responses/Unauthenticated' }
@@ -493,7 +601,7 @@ components:
     bearerAuth:
       type: http
       scheme: bearer
-      description: Sanctum personal access token from `/auth/login` or `/auth/register`.
+      description: Sanctum access token from `/auth/login`, `/auth/refresh` or `/auth/email/verify`.
 
   parameters:
     EventId:
@@ -580,16 +688,26 @@ components:
 
     TokenResponse:
       type: object
-      required: [token, token_type, expires_at, user]
+      required: [token, token_type, expires_at, refresh_token, refresh_token_expires_at, user]
       properties:
-        token: { type: string, example: 1|q8Cw0bH9pS... }
+        token: { type: string, example: 1|q8Cw0bH9pS..., description: 'The access token, sent as `Authorization: Bearer <token>`.' }
         token_type: { type: string, enum: [Bearer] }
         expires_at:
           type: string
           format: date-time
           nullable: true
-          description: When the token stops working (a week after issue by default; null if tokens never expire). Log in again after that.
+          description: When the access token stops working (an hour after issue by default). Use the refresh token to get a new one.
+        refresh_token:
+          type: string
+          description: Single use. Send it to `POST /auth/refresh` for a new pair; keep it as secret as a password.
+        refresh_token_expires_at: { type: string, format: date-time, description: 30 days after issue by default. }
         user: { $ref: '#/components/schemas/User' }
+
+    Accepted:
+      type: object
+      required: [message]
+      properties:
+        message: { type: string, example: "Check your inbox: we've sent you an e-mail to confirm your address." }
 
     User:
       type: object

@@ -29,6 +29,14 @@ Sync clients (a mobile app's offline cache, a calendar export) need "what change
 ### Idempotent creates
 A client that times out on `POST /events` can't tell whether the event was created. With an `Idempotency-Key` it can just retry: the first response is stored for 24 hours (keyed on caller, route and key) and replayed for repeats, a lock turns concurrent duplicates into a 409, and a different body under the same key is rejected instead of silently returning an unrelated event. Server errors aren't stored, so a retry after a 500 really runs again. The SPA keeps a key only while retrying after network failures; any answer from the server starts a new attempt, so fixing a validation error doesn't trip the reused-key check.
 
+### Accounts confirmed by e-mail, without revealing who has one
+Registration never says "that address is taken": it always answers `202 Check your inbox`. A new address gets a confirmation link; an address that already has an account gets an e-mail telling its owner so (or a fresh link, if it was never confirmed). The password is hashed on both paths so they take about as long. Resending a link and failed logins answer the same way, so no endpoint can be used to test which addresses are registered. Only someone with the right password learns that an account is unconfirmed (`403 email-not-verified`), and that tells them nothing new.
+
+The link is a signed URL with a one-hour expiry. The e-mail points at the SPA (`/verify-email`), which posts the signed parameters to the API; the signature is relative (path and query only), so it doesn't depend on the API's host. Confirming logs the user in, so no tokens exist for unconfirmed accounts at all.
+
+### Short-lived access tokens, rotating refresh tokens
+Access tokens last an hour, so a leaked one is useful only briefly. Each login also gets a 30-day refresh token (stored hashed, like Sanctum's tokens) that `POST /auth/refresh` exchanges for a new pair; the old pair is retired. All tokens descended from one login share a family, and presenting an already-used refresh token revokes the whole family: either an attacker or the real client is replaying a token, and the server can't tell which, so both must log in again. Logging out revokes the family too. The SPA refreshes on the first 401 and retries the request once, for REST and GraphQL alike; parallel requests share one refresh, because two concurrent refreshes with the same single-use token would trip the reuse detection.
+
 ### UTC everywhere, offsets required
 Input must be ISO 8601 with an offset. `Iso8601DateTime` is shared by REST validation and the GraphQL `DateTime` scalar. Instants are stored and returned in UTC (`…Z`). Without this, Eloquent silently drops a client's offset, and Laravel's `date` rule accepts strings like "next friday".
 
@@ -42,8 +50,9 @@ Input must be ISO 8601 with an offset. `Iso8601DateTime` is shared by REST valid
 
 These are deliberate omissions for a demo, and each would come up before a production launch:
 
-- **Registration reveals taken e-mail addresses.** Login no longer does (it always checks a password hash, and fails the same way for unknown accounts), but registering with a taken address still says so. Hiding that needs an e-mail verification flow ("check your inbox"), which this project doesn't have.
-- **No refresh tokens.** Tokens expire after a week and the SPA sends the user back to log in. A product would add refresh tokens or sliding expiry.
+- **Refresh tokens in `localStorage`.** Like the access token, the refresh token is readable by any script on the SPA's origin, so an XSS bug could steal a login for up to 30 days (rotation and reuse detection limit, but don't prevent, that). The alternative, an `HttpOnly` cookie on a refresh endpoint, would mean cookies and CSRF handling for one route, against the "no cookies, any client on any origin" design.
+- **Mail is sent inline.** Confirmation e-mails go out during the request (and to the log locally). A production setup would queue them, which would also keep "account exists" and "new account" responses even closer in timing.
+- **No password reset.** It would reuse the signed-link flow the confirmation e-mail already uses.
 - **Locking on SQLite.** Registration and capacity changes lock the event row. That serialises them on MySQL and PostgreSQL. SQLite ignores `FOR UPDATE` but serialises writers anyway, and a duplicate concurrent registration falls back to the unique index.
 - **Idempotency only on `POST /events`.** The middleware works on any write, but only event creation needs it: registration is already an idempotent `PUT`, and updates and deletes are naturally safe to repeat. GraphQL mutations don't take a key.
 - **`/me/registrations` isn't paginated.** It returns upcoming events only, which stays small for a person.

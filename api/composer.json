@@ -58,7 +58,7 @@
         ],
         "schema:graphql": [
             "@php artisan lighthouse:print-schema --sort --write --disk=local --quiet",
-            "@php -r \"file_put_contents('../schema.graphql', rtrim(file_get_contents('storage/app/private/lighthouse-schema.graphql')).PHP_EOL);\""
+            "@php -r \"file_put_contents('../schema.graphql', rtrim(file_get_contents('storage/app/private/lighthouse-schema.graphql')).chr(10));\""
         ],
         "post-autoload-dump": [
             "Illuminate\\Foundation\\ComposerScripts::postAutoloadDump",

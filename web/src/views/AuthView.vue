@@ -15,6 +15,8 @@ const router = useRouter()
 const form = reactive({ name: '', email: '', password: '' })
 const error = ref<ApiError | null>(null)
 const submitting = ref(false)
+/** "Check your inbox" after registering or asking for a new link. */
+const notice = ref<string | null>(null)
 const fieldError = (field: string) => error.value?.fieldErrors[field]?.[0]
 /** Links an input to its error message for screen readers. */
 const describedBy = (field: string) => (fieldError(field) ? `${field}-error` : undefined)
@@ -23,9 +25,13 @@ const formEl = useTemplateRef<HTMLFormElement>('formRef')
 async function submit(): Promise<void> {
   submitting.value = true
   error.value = null
+  notice.value = null
   try {
-    if (props.mode === 'login') await auth.login(form.email, form.password)
-    else await auth.register(form.name, form.email, form.password)
+    if (props.mode === 'register') {
+      notice.value = await auth.register(form.name, form.email, form.password)
+      return
+    }
+    await auth.login(form.email, form.password)
 
     const redirect = route.query.redirect
     await router.replace(
@@ -34,6 +40,18 @@ async function submit(): Promise<void> {
   } catch (e) {
     error.value = toApiError(e)
     if (error.value.isValidation) void focusFirstInvalid(formEl.value)
+  } finally {
+    submitting.value = false
+  }
+}
+
+async function resend(): Promise<void> {
+  submitting.value = true
+  try {
+    notice.value = await auth.resendVerification(form.email)
+    error.value = null
+  } catch (e) {
+    error.value = toApiError(e)
   } finally {
     submitting.value = false
   }
@@ -51,8 +69,38 @@ function useDemoAccount(): void {
       {{ mode === 'login' ? 'Log in to Gather' : 'Create your account' }}
     </h1>
 
-    <form ref="formRef" class="card space-y-4 p-6" novalidate @submit.prevent="submit">
+    <div
+      v-if="notice"
+      class="card space-y-3 p-6 text-center"
+      role="status"
+      data-testid="check-inbox"
+    >
+      <p class="font-medium">{{ notice }}</p>
+      <p class="text-sm text-slate-500 dark:text-slate-400">
+        The link works for an hour. Nothing arrived?
+      </p>
+      <button
+        type="button"
+        class="text-sm text-brand-600 hover:underline dark:text-brand-300"
+        :disabled="submitting"
+        @click="resend"
+      >
+        Send another link
+      </button>
+    </div>
+
+    <form v-else ref="formRef" class="card space-y-4 p-6" novalidate @submit.prevent="submit">
       <ErrorAlert v-if="error && !error.isValidation" :error="error" />
+      <button
+        v-if="error?.code === 'email_not_verified'"
+        type="button"
+        class="w-full text-center text-sm text-brand-600 hover:underline dark:text-brand-300"
+        :disabled="submitting"
+        data-testid="resend"
+        @click="resend"
+      >
+        Send me a new confirmation link
+      </button>
 
       <div v-if="mode === 'register'">
         <label class="label" for="name">Name</label>

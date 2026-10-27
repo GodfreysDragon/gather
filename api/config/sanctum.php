@@ -47,8 +47,11 @@ return [
     |
     */
 
-    // Tokens last a week (in minutes); the SPA sends the user back to log in after that.
-    'expiration' => (int) env('SANCTUM_EXPIRATION', 60 * 24 * 7),
+    // Access tokens are short-lived (in minutes): clients get a new one with the refresh
+    // token (POST /auth/refresh), which lasts 30 days and rotates on every use.
+    'expiration' => (int) env('SANCTUM_EXPIRATION', 60),
+
+    'refresh_expiration' => (int) env('SANCTUM_REFRESH_EXPIRATION', 60 * 24 * 30),
 
     /*
     |--------------------------------------------------------------------------

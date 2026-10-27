@@ -47,6 +47,19 @@ const router = createRouter({
       meta: { title: 'Create account' },
     },
     {
+      // The link in the confirmation e-mail lands here.
+      path: '/verify-email',
+      name: 'verify-email',
+      component: () => import('@/views/VerifyEmailView.vue'),
+      props: (route) => ({
+        id: Number(route.query.id),
+        hash: String(route.query.hash ?? ''),
+        expires: Number(route.query.expires),
+        signature: String(route.query.signature ?? ''),
+      }),
+      meta: { title: 'Confirm your address' },
+    },
+    {
       path: '/:pathMatch(.*)*',
       name: 'not-found',
       component: () => import('@/views/NotFoundView.vue'),

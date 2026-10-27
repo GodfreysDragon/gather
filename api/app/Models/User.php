@@ -40,6 +40,12 @@ class User extends Authenticatable
         return $this->belongsToMany(Event::class, 'registrations')->withTimestamps();
     }
 
+    /** @return HasMany<RefreshToken, $this> */
+    public function refreshTokens(): HasMany
+    {
+        return $this->hasMany(RefreshToken::class);
+    }
+
     /**
      * Get the attributes that should be cast.
      *

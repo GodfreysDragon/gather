@@ -10,37 +10,6 @@ class AuthTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_register_creates_an_account_and_returns_a_bearer_token(): void
-    {
-        $response = $this->postJson('/api/v1/auth/register', [
-            'name' => 'Ada Lovelace',
-            'email' => 'ada@example.com',
-            'password' => 'correct horse',
-        ]);
-
-        $response->assertCreated()
-            ->assertJsonPath('token_type', 'Bearer')
-            ->assertJsonPath('user.email', 'ada@example.com');
-
-        $this->assertDatabaseHas('users', ['email' => 'ada@example.com']);
-        $this->assertDatabaseCount('personal_access_tokens', 1);
-    }
-
-    public function test_register_rejects_a_duplicate_email_with_a_validation_problem(): void
-    {
-        User::factory()->create(['email' => 'ada@example.com']);
-
-        $this->postJson('/api/v1/auth/register', [
-            'name' => 'Ada',
-            'email' => 'ada@example.com',
-            'password' => 'correct horse',
-        ])
-            ->assertUnprocessable()
-            ->assertHeader('Content-Type', 'application/problem+json')
-            ->assertJsonPath('status', 422)
-            ->assertJsonValidationErrors('email');
-    }
-
     public function test_login_issues_a_token_that_authenticates_later_requests(): void
     {
         User::factory()->create(['email' => 'ada@example.com']);
@@ -101,30 +70,27 @@ class AuthTest extends TestCase
 
     public function test_email_addresses_are_case_insensitive(): void
     {
-        $this->postJson('/api/v1/auth/register', [
-            'name' => 'Ada', 'email' => 'Ada@Example.com', 'password' => 'correct-horse',
-        ])->assertCreated()->assertJsonPath('user.email', 'ada@example.com');
+        User::factory()->create(['email' => 'ada@example.com']);
 
-        $this->postJson('/api/v1/auth/register', [
-            'name' => 'Ada again', 'email' => 'ada@example.com', 'password' => 'correct-horse',
-        ])->assertUnprocessable()->assertJsonValidationErrors('email');
-
-        $this->postJson('/api/v1/auth/login', ['email' => 'ADA@example.com', 'password' => 'correct-horse'])->assertOk();
+        $this->postJson('/api/v1/auth/login', ['email' => 'ADA@Example.com', 'password' => 'password'])
+            ->assertOk()
+            ->assertJsonPath('user.email', 'ada@example.com');
     }
 
-    public function test_tokens_expire_after_a_week(): void
+    public function test_access_tokens_expire_after_an_hour(): void
     {
         User::factory()->create(['email' => 'ada@example.com']);
 
         $response = $this->postJson('/api/v1/auth/login', ['email' => 'ada@example.com', 'password' => 'password'])
             ->assertOk()
-            ->assertJsonPath('expires_at', now()->addWeek()->utc()->toIso8601ZuluString());
+            ->assertJsonPath('expires_at', now()->addHour()->utc()->toIso8601ZuluString())
+            ->assertJsonPath('refresh_token_expires_at', now()->addDays(30)->utc()->toIso8601ZuluString());
         $headers = ['Authorization' => 'Bearer '.$response->json('token')];
 
-        $this->travel(6)->days();
+        $this->travel(59)->minutes();
         $this->getJson('/api/v1/me', $headers)->assertOk();
 
-        $this->travel(2)->days();
+        $this->travel(2)->minutes();
         $this->app['auth']->forgetGuards();
         $this->getJson('/api/v1/me', $headers)->assertUnauthorized();
     }

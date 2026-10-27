@@ -13,7 +13,12 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Create an account and receive a token */
+        /**
+         * Create an account (confirmed by e-mail)
+         * @description Always answers `202` with the same message. A new address gets a confirmation link
+         *     (valid for an hour); an address that already has an account gets an e-mail saying so
+         *     instead, so the response never reveals which addresses are registered.
+         */
         post: operations["register"];
         delete?: never;
         options?: never;
@@ -38,6 +43,70 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/auth/refresh": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Exchange a refresh token for a new token pair
+         * @description Refresh tokens are single use: each call returns a new pair and retires the old one
+         *     (and its access token). Presenting an already-used refresh token revokes every token
+         *     from that login, since it means the token was copied.
+         */
+        post: operations["refreshToken"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/email/verify/{id}/{hash}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Confirm an e-mail address and log in
+         * @description The confirmation e-mail links to the SPA's `/verify-email` page with these parameters;
+         *     the SPA posts them here. A tampered or expired link is a `403`; a link for an address
+         *     that is already confirmed (or no longer matches) is a `410` (`verification-link-invalid`).
+         */
+        post: operations["verifyEmail"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/auth/email/resend": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Send a new confirmation link
+         * @description Always answers `202`; an e-mail goes out only if the address has an unconfirmed account.
+         */
+        post: operations["resendVerification"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/auth/logout": {
         parameters: {
             query?: never;
@@ -47,7 +116,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Revoke the token used for this request */
+        /** Log out (revokes this login's access and refresh tokens) */
         post: operations["logout"];
         delete?: never;
         options?: never;
@@ -273,16 +342,30 @@ export interface components {
             };
         };
         TokenResponse: {
-            /** @example 1|q8Cw0bH9pS... */
+            /**
+             * @description The access token, sent as `Authorization: Bearer <token>`.
+             * @example 1|q8Cw0bH9pS...
+             */
             token: string;
             /** @enum {string} */
             token_type: "Bearer";
             /**
              * Format: date-time
-             * @description When the token stops working (a week after issue by default; null if tokens never expire). Log in again after that.
+             * @description When the access token stops working (an hour after issue by default). Use the refresh token to get a new one.
              */
             expires_at: string | null;
+            /** @description Single use. Send it to `POST /auth/refresh` for a new pair; keep it as secret as a password. */
+            refresh_token: string;
+            /**
+             * Format: date-time
+             * @description 30 days after issue by default.
+             */
+            refresh_token_expires_at: string;
             user: components["schemas"]["User"];
+        };
+        Accepted: {
+            /** @example Check your inbox: we've sent you an e-mail to confirm your address. */
+            message: string;
         };
         User: {
             id: number;
@@ -520,19 +603,17 @@ export interface operations {
                     /** Format: email */
                     email: string;
                     password: string;
-                    /** @description Label for the token, e.g. "web" or "iPhone". */
-                    device_name?: string;
                 };
             };
         };
         responses: {
-            /** @description Account created */
-            201: {
+            /** @description Check your inbox */
+            202: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["TokenResponse"];
+                    "application/json": components["schemas"]["Accepted"];
                 };
             };
             422: components["responses"]["ValidationFailed"];
@@ -553,6 +634,7 @@ export interface operations {
                     /** Format: email */
                     email: string;
                     password: string;
+                    /** @description Label for the tokens, e.g. "web" or "iPhone". */
                     device_name?: string;
                 };
             };
@@ -565,6 +647,120 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TokenResponse"];
+                };
+            };
+            /** @description Right password, but the address isn't confirmed yet (`email-not-verified`). Ask for a new link with `POST /auth/email/resend`. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            422: components["responses"]["ValidationFailed"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["ServerError"];
+        };
+    };
+    refreshToken: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    refresh_token: string;
+                };
+            };
+        };
+        responses: {
+            /** @description A new token pair */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TokenResponse"];
+                };
+            };
+            401: components["responses"]["Unauthenticated"];
+            422: components["responses"]["ValidationFailed"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["ServerError"];
+        };
+    };
+    verifyEmail: {
+        parameters: {
+            query: {
+                expires: number;
+                signature: string;
+            };
+            header?: never;
+            path: {
+                id: number;
+                hash: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": {
+                    device_name?: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Address confirmed; the account's first tokens */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TokenResponse"];
+                };
+            };
+            403: components["responses"]["Forbidden"];
+            /** @description The link was already used or no longer matches the account. */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
+            422: components["responses"]["ValidationFailed"];
+            429: components["responses"]["TooManyRequests"];
+            500: components["responses"]["ServerError"];
+        };
+    };
+    resendVerification: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": {
+                    /** Format: email */
+                    email: string;
+                };
+            };
+        };
+        responses: {
+            /** @description Check your inbox */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Accepted"];
                 };
             };
             422: components["responses"]["ValidationFailed"];
