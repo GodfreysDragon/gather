@@ -79,7 +79,8 @@ npm run dev
 ```
 
 Log in as **`demo@gather.test` / `password`**, or as **`admin@gather.test` / `password`** to create venues. The demo
-data is the same on every seed.
+data is the same on every seed. New accounts confirm their address by e-mail; locally, mail goes to the log
+(`MAIL_MAILER=log`), so the confirmation link is in `api/storage/logs/laravel.log`.
 
 The two run on different origins on purpose. If you change either port, keep `VITE_API_URL` (web) and
 `CORS_ALLOWED_ORIGINS` (api) in sync.
@@ -146,13 +147,18 @@ A test asserts that REST and GraphQL return the **same events in the same order*
   - an event people registered for can't go back to draft.
 - **Conditional GETs**: weak `ETag` and `If-None-Match` → `304`.
 - **Rate limiting**: 120 requests/min per user or IP, and 10/min on the auth endpoints, keyed on IP + e-mail.
-- **Stateless bearer tokens** (Sanctum personal access tokens) that expire after a week (`expires_at` in the login
-  response). There are no cookies, so any client on any origin works the same way. CORS lists only the SPA's origin
-  and exposes `ETag`, `Location`, `Retry-After` and `Idempotent-Replayed`.
+- **Stateless bearer tokens with rotating refresh tokens**: Sanctum access tokens last an hour; `POST /auth/refresh`
+  trades the single-use refresh token (30 days) for a new pair. Replaying a used refresh token is treated as theft
+  and revokes the whole login. The SPA refreshes and retries transparently, over REST and GraphQL alike, sharing one
+  refresh between parallel requests. There are no cookies, so any client on any origin works the same way. CORS lists
+  only the SPA's origin and exposes `ETag`, `Location`, `Retry-After` and `Idempotent-Replayed`.
+- **Accounts confirmed by e-mail**: registering sends a signed, one-hour link; following it confirms the address and
+  logs the user in. No tokens are issued before that.
 - **Roles where data is shared**: only admins can add venues, since every organizer uses them.
 - **No existence leaks**:
   - someone else's draft is a 404, never a 403, for reads and writes alike;
-  - a failed login looks and takes the same whether or not the e-mail has an account;
+  - registering, resending a link and failed logins answer the same whether or not the e-mail has an account (a
+    taken address gets a "you already have an account" e-mail instead of an error);
   - e-mail addresses appear only on your own profile;
   - attendee lists are organizer-only.
 - **UTC everywhere**: input must carry an offset, and output is always `…Z`.
@@ -192,10 +198,10 @@ A test asserts that REST and GraphQL return the **same events in the same order*
 
 | Suite | Command | What it covers |
 |---|---|---|
-| API feature tests | `cd api && php artisan test` | 78 tests: auth and token expiry, listing/filtering, cursor pagination and the change feed, CRUD, policies, registration rules, idempotent creates, problem documents, ETags, rate limits, N+1, GraphQL queries/mutations/errors/limits, REST↔GraphQL parity, docs pages. Every REST request and response is validated against `openapi.yaml`. |
-| SPA unit tests | `cd web && npx vitest run` | 43 tests: error normalisation for both transports, REST and GraphQL mappers producing identical UI models, stale-response handling, session expiry, idempotency keys, form validation and focus, components |
+| API feature tests | `cd api && php artisan test` | 89 tests: auth, e-mail confirmation, token refresh and reuse detection, listing/filtering, cursor pagination and the change feed, CRUD, policies, registration rules, idempotent creates, problem documents, ETags, rate limits, N+1, GraphQL queries/mutations/errors/limits, REST↔GraphQL parity, docs pages. Every REST request and response is validated against `openapi.yaml`. |
+| SPA unit tests | `cd web && npx vitest run` | 53 tests: error normalisation for both transports, REST and GraphQL mappers producing identical UI models, stale-response handling, session expiry, transparent token refresh, registration and e-mail confirmation screens, idempotency keys, form validation and focus, components |
 | Type check / lint | `cd web && npm run type-check && npm run lint:check` | Including the generated REST and GraphQL types |
-| End-to-end | `cd web && E2E_URL=http://localhost:5173 npm run test:e2e` | 13 checks in headless Chromium against the real API, through **both** transports: listing, filters, login, `event_full` rejection, register/cancel, server-side validation, create, "My events", phone layout, no console errors. `npm run test:e2e -- --dark` repeats it in dark mode. Needs both servers running on a freshly seeded database. |
+| End-to-end | `cd web && E2E_URL=http://localhost:5173 npm run test:e2e` | 15 checks in headless Chromium against the real API, through **both** transports: listing, filters, login, `event_full` rejection, register/cancel, server-side validation, create, "My events", a transparent token refresh, signing up through the e-mailed confirmation link (read from the API's mail log), phone layout, no console errors. `npm run test:e2e -- --dark` repeats it in dark mode. Needs both servers running on a freshly seeded database. |
 
 All four run in [GitHub Actions](.github/workflows/ci.yml) on every push. The end-to-end job seeds a database, serves
 the production build and uploads its screenshots as an artifact. `npm run capture` regenerates the images in this
@@ -224,9 +230,8 @@ end-to-end tests caught during development, and the trade-offs it still leaves o
 
 ## What's next
 
-1. A production deployment: PostgreSQL, the API on a container host, and the SPA on a CDN.
-2. E-mail verification, which would also let registration stop revealing whether an address is taken.
-3. Refresh tokens, so a week-long session can be extended without logging in again.
+1. A production deployment: PostgreSQL, the API on a container host, the SPA on a CDN, and a real mail service.
+2. Password reset, reusing the signed-link flow that confirms e-mail addresses.
 
 ## License
 
