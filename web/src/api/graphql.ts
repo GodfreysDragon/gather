@@ -7,7 +7,8 @@ import {
   type FieldErrors,
   type ProblemDocument,
 } from './errors'
-import { API_ORIGIN } from './rest'
+import { API_ORIGIN } from './origin'
+import { refreshTokens } from './refresh'
 import { notifyUnauthenticated } from './session'
 import { getToken } from './token'
 
@@ -51,6 +52,14 @@ export async function graphql<TData, TVariables extends Record<string, unknown> 
   query: string,
   variables?: TVariables,
 ): Promise<TData> {
+  return execute<TData>(query, variables, false)
+}
+
+async function execute<TData>(
+  query: string,
+  variables: Record<string, unknown> | undefined,
+  retried: boolean,
+): Promise<TData> {
   const operation = query.match(/(query|mutation)\s+(\w+)/)?.[2] ?? 'anonymous'
   const started = performance.now()
   const token = getToken()
@@ -85,15 +94,16 @@ export async function graphql<TData, TVariables extends Record<string, unknown> 
   const [error] = (body as GraphQLResponse<TData> | null)?.errors ?? []
   log(!response.ok ? response.status : error ? 'error' : response.status, text.length)
 
-  if (error) {
-    const apiError = fromGraphQLError(error)
-    if (apiError.status === 401 && token) notifyUnauthenticated()
-    throw apiError
-  }
+  const apiError = error ? fromGraphQLError(error) : !response.ok ? httpError(response, body) : null
 
-  if (!response.ok) {
-    if (response.status === 401 && token) notifyUnauthenticated()
-    throw httpError(response, body)
+  if (apiError) {
+    // The token we sent expired: refresh it and run the operation again, once. The
+    // guard rejected it before any resolver ran, so repeating a mutation is safe.
+    if (apiError.status === 401 && token) {
+      if (!retried && (await refreshTokens())) return execute<TData>(query, variables, true)
+      notifyUnauthenticated()
+    }
+    throw apiError
   }
 
   if (body === null || typeof body !== 'object' || !('data' in body)) {

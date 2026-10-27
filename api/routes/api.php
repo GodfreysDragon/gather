@@ -16,6 +16,13 @@ Route::prefix('v1')->name('v1.')->group(function () {
     Route::middleware('throttle:auth')->group(function () {
         Route::post('auth/register', [AuthController::class, 'register'])->name('auth.register');
         Route::post('auth/login', [AuthController::class, 'login'])->name('auth.login');
+        Route::post('auth/refresh', [AuthController::class, 'refresh'])->name('auth.refresh');
+        Route::post('auth/email/resend', [AuthController::class, 'resendVerification'])->name('auth.verification.resend');
+        // The link in the confirmation e-mail. Relative signature: it's checked on the
+        // path and query only, so it doesn't matter which host the SPA calls.
+        Route::post('auth/email/verify/{id}/{hash}', [AuthController::class, 'verifyEmail'])
+            ->middleware('signed:relative')
+            ->name('auth.verification.verify');
     });
 
     // Public reads. Authentication is optional and only personalises the response.

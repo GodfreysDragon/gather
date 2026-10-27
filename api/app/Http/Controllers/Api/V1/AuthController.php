@@ -2,9 +2,14 @@
 
 namespace App\Http\Controllers\Api\V1;
 
+use App\Auth\TokenIssuer;
+use App\Exceptions\EmailNotVerifiedException;
+use App\Exceptions\InvalidVerificationLinkException;
 use App\Http\Controllers\Controller;
 use App\Http\Resources\UserResource;
 use App\Models\User;
+use App\Notifications\AccountAlreadyExists;
+use App\Notifications\VerifyEmailAddress;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -14,8 +19,13 @@ use Illuminate\Validation\Rules\Password;
 use Illuminate\Validation\ValidationException;
 
 /**
- * Stateless bearer-token auth (Sanctum personal access tokens). No cookies or
- * sessions, so any client on any origin (SPA, mobile app, CLI) uses the API the same way.
+ * Stateless bearer-token auth: short-lived Sanctum access tokens plus rotating refresh
+ * tokens. No cookies or sessions, so any client on any origin (SPA, mobile app, CLI)
+ * uses the API the same way.
+ *
+ * Nothing here reveals whether an e-mail address has an account: registration and
+ * resending answer the same either way, and a failed login looks the same for an
+ * unknown address as for a wrong password.
  */
 class AuthController extends Controller
 {
@@ -26,20 +36,33 @@ class AuthController extends Controller
      */
     private const TIMING_HASH = '$2y$12$JNe1yNreZnk5gtJMxbiD1.8i7l8HRehwha1vJQDybXdHdfT8NjfCe';
 
+    private const CHECK_INBOX = 'Check your inbox: we\'ve sent you an e-mail to confirm your address.';
+
+    public function __construct(private TokenIssuer $tokens) {}
+
     public function register(Request $request): JsonResponse
     {
         $this->normaliseEmail($request);
 
         $data = $request->validate([
             'name' => ['required', 'string', 'max:100'],
-            'email' => ['required', 'string', 'email', 'max:255', 'unique:users,email'],
+            'email' => ['required', 'string', 'email', 'max:255'],
             'password' => ['required', 'string', Password::min(8)],
-            'device_name' => ['sometimes', 'string', 'max:100'],
         ]);
 
-        $user = User::create($data);
+        $existing = User::where('email', $data['email'])->first();
 
-        return $this->tokenResponse($request, $user, $data['device_name'] ?? 'web', Response::HTTP_CREATED);
+        if ($existing !== null) {
+            // Hash anyway, so this path takes as long as creating an account.
+            Hash::make($data['password']);
+            $existing->hasVerifiedEmail()
+                ? $existing->notify(new AccountAlreadyExists)
+                : $existing->notify(new VerifyEmailAddress);
+        } else {
+            User::create($data)->notify(new VerifyEmailAddress);
+        }
+
+        return $this->accepted();
     }
 
     public function login(Request $request): JsonResponse
@@ -60,12 +83,64 @@ class AuthController extends Controller
             throw ValidationException::withMessages(['email' => __('auth.failed')]);
         }
 
-        return $this->tokenResponse($request, $user, $data['device_name'] ?? 'web', Response::HTTP_OK);
+        // Only the address's owner can get this far, so saying so reveals nothing new.
+        if (! $user->hasVerifiedEmail()) {
+            throw new EmailNotVerifiedException;
+        }
+
+        return $this->tokenResponse($request, $user, $this->tokens->issue($user, $data['device_name'] ?? 'web'), Response::HTTP_OK);
     }
 
+    /**
+     * Completes registration from the link in the confirmation e-mail (route is signed),
+     * and logs the user in.
+     */
+    public function verifyEmail(Request $request, string $id, string $hash): JsonResponse
+    {
+        $data = $request->validate(['device_name' => ['sometimes', 'string', 'max:100']]);
+
+        $user = User::find($id);
+
+        if ($user === null || $user->hasVerifiedEmail() || ! hash_equals(sha1($user->getEmailForVerification()), $hash)) {
+            throw new InvalidVerificationLinkException;
+        }
+
+        $user->markEmailAsVerified();
+
+        return $this->tokenResponse($request, $user, $this->tokens->issue($user, $data['device_name'] ?? 'web'), Response::HTTP_OK);
+    }
+
+    public function resendVerification(Request $request): JsonResponse
+    {
+        $this->normaliseEmail($request);
+
+        $data = $request->validate(['email' => ['required', 'string', 'email']]);
+
+        $user = User::where('email', $data['email'])->first();
+
+        if ($user !== null && ! $user->hasVerifiedEmail()) {
+            $user->notify(new VerifyEmailAddress);
+        }
+
+        return $this->accepted();
+    }
+
+    public function refresh(Request $request): JsonResponse
+    {
+        $data = $request->validate(['refresh_token' => ['required', 'string', 'max:255']]);
+
+        ['user' => $user, 'tokens' => $tokens] = $this->tokens->refresh($data['refresh_token']);
+
+        return $this->tokenResponse($request, $user, $tokens, Response::HTTP_OK);
+    }
+
+    /**
+     * Ends this login everywhere it was refreshed: the access token and its whole
+     * refresh-token family are revoked.
+     */
     public function logout(Request $request): Response
     {
-        $request->user()->currentAccessToken()->delete();
+        $this->tokens->revokeFamilyOf($request->user()->currentAccessToken());
 
         return response()->noContent();
     }
@@ -81,19 +156,19 @@ class AuthController extends Controller
         }
     }
 
-    private function tokenResponse(Request $request, User $user, string $deviceName, int $status): JsonResponse
+    private function accepted(): JsonResponse
     {
-        $minutes = config('sanctum.expiration');
-        $token = $user->createToken($deviceName, expiresAt: $minutes ? now()->addMinutes($minutes) : null);
+        return response()->json(['message' => self::CHECK_INBOX], Response::HTTP_ACCEPTED);
+    }
 
-        // The new user isn't the request's authenticated user yet, so show their e-mail explicitly.
+    /**
+     * @param  array<string, mixed>  $tokens
+     */
+    private function tokenResponse(Request $request, User $user, array $tokens, int $status): JsonResponse
+    {
+        // The user isn't the request's authenticated user, so show their e-mail explicitly.
         $request->setUserResolver(fn () => $user);
 
-        return response()->json([
-            'token' => $token->plainTextToken,
-            'token_type' => 'Bearer',
-            'expires_at' => $token->accessToken->expires_at?->utc()->toIso8601ZuluString(),
-            'user' => new UserResource($user),
-        ], $status);
+        return response()->json([...$tokens, 'user' => new UserResource($user)], $status);
     }
 }
