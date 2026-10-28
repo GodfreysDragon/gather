@@ -109,8 +109,9 @@ A test asserts that REST and GraphQL return the **same events in the same order*
 - `openapi.yaml` is hand-written, and it is the source of truth.
 - **Every REST call in the PHP test suite is also a contract test.** `tests/TestCase.php` validates each response
   against the spec for its route, method and status code. Each request the API accepts is validated as well. The
-  test fails on an undocumented status code, a missing or wrongly typed field, or input the server accepts but the
-  contract doesn't describe.
+  test fails on an undocumented status code, a missing or wrongly typed field, or a request the server accepts that
+  breaks the documented constraints. (Like most OpenAPI validators it doesn't reject *extra* fields or query
+  parameters, and GraphQL calls are checked by the GraphQL schema instead.)
 - The SPA **generates its TypeScript types from the same file** (`npm run gen:api`) and calls the API through
   `openapi-fetch`, so paths, parameters, bodies and responses are checked at compile time. CI fails if the generated
   types are stale.
@@ -146,11 +147,15 @@ A test asserts that REST and GraphQL return the **same events in the same order*
   - an event's capacity must fit its venue, also after a venue change;
   - an event people registered for can't go back to draft.
 - **Conditional GETs**: weak `ETag` and `If-None-Match` → `304`.
-- **Rate limiting**: 120 requests/min per user or IP, and 10/min on the auth endpoints, keyed on IP + e-mail.
+- **Rate limiting**: 120 requests/min per user or IP. The auth endpoints allow 10/min per IP for each thing they
+  guard (an e-mail address, a refresh token, a confirmation link), so people sharing an office IP don't block each
+  other, plus 30 credential attempts/min per IP across addresses.
 - **Stateless bearer tokens with rotating refresh tokens**: Sanctum access tokens last an hour; `POST /auth/refresh`
   trades the single-use refresh token (30 days) for a new pair. Replaying a used refresh token is treated as theft
-  and revokes the whole login. The SPA refreshes and retries transparently, over REST and GraphQL alike, sharing one
-  refresh between parallel requests. There are no cookies, so any client on any origin works the same way. CORS lists
+  and revokes the whole login (a duplicate within seconds, such as two tabs racing, is refused but not punished). The
+  SPA refreshes and retries transparently, over REST and GraphQL alike: one refresh at a time across all open tabs,
+  a request that raced a refresh is simply retried with the new token, and a refresh that fails because the API is
+  unreachable keeps the session instead of logging out. There are no cookies, so any client on any origin works the same way. CORS lists
   only the SPA's origin and exposes `ETag`, `Location`, `Retry-After` and `Idempotent-Replayed`.
 - **Accounts confirmed by e-mail**: registering sends a signed, one-hour link; following it confirms the address and
   logs the user in. No tokens are issued before that.
@@ -172,8 +177,8 @@ A test asserts that REST and GraphQL return the **same events in the same order*
   - `RegistrationPayload` mutation results;
   - Lighthouse pagination with `paginatorInfo`.
 - **Query complexity and depth limits** reject expensive queries, such as aliasing several 50-item pages, before any
-  SQL runs. Introspection is exempt from the depth limit (it is bounded by the schema), so GraphiQL and code
-  generators work.
+  SQL runs. Introspection gets its own, higher depth cap (15 instead of 8), so GraphiQL and code generators work but a
+  cyclic `ofType { fields { type … } }` query can't ask for an exponentially large response.
 - Validation errors use GraphQL field names (`input.endsAt`), even though the validation rules are shared with REST.
 - Authentication belongs to REST: GraphQL accepts the same bearer token but doesn't issue tokens.
 
@@ -186,7 +191,8 @@ A test asserts that REST and GraphQL return the **same events in the same order*
 - Both transports' errors are normalised into one `ApiError`. A REST 409 `event-full` and a GraphQL `EVENT_FULL`
   look the same in the UI, and so do 422 field errors.
 - **Robust data loading**: only the latest response wins, so a slow request never overwrites a newer one. An expired
-  token clears the session and redirects to login, then returns you to where you were.
+  access token is refreshed silently; only when the login itself has ended does the app send you to log in, then back
+  to where you were (local paths only, so `?redirect=` can't send you off-site).
 - **Accessible**:
   - labelled form errors (`aria-describedby`), with focus moved to the first invalid field;
   - focus moved to the page on navigation;
@@ -198,8 +204,8 @@ A test asserts that REST and GraphQL return the **same events in the same order*
 
 | Suite | Command | What it covers |
 |---|---|---|
-| API feature tests | `cd api && php artisan test` | 89 tests: auth, e-mail confirmation, token refresh and reuse detection, listing/filtering, cursor pagination and the change feed, CRUD, policies, registration rules, idempotent creates, problem documents, ETags, rate limits, N+1, GraphQL queries/mutations/errors/limits, REST↔GraphQL parity, docs pages. Every REST request and response is validated against `openapi.yaml`. |
-| SPA unit tests | `cd web && npx vitest run` | 53 tests: error normalisation for both transports, REST and GraphQL mappers producing identical UI models, stale-response handling, session expiry, transparent token refresh, registration and e-mail confirmation screens, idempotency keys, form validation and focus, components |
+| API feature tests | `cd api && php artisan test` | 97 tests: auth, e-mail confirmation, token refresh and reuse detection, listing/filtering, cursor pagination and the change feed, CRUD, policies, registration rules, idempotent creates, problem documents, ETags, rate limits, N+1, GraphQL queries/mutations/errors/limits, REST↔GraphQL parity, docs pages. Every REST request and response is validated against `openapi.yaml`. |
+| SPA unit tests | `cd web && npx vitest run` | 74 tests: error normalisation for both transports, REST and GraphQL mappers producing identical UI models, stale-response handling, session expiry, transparent token refresh, registration and e-mail confirmation screens, idempotency keys, form validation and focus, components |
 | Type check / lint | `cd web && npm run type-check && npm run lint:check` | Including the generated REST and GraphQL types |
 | End-to-end | `cd web && E2E_URL=http://localhost:5173 npm run test:e2e` | 15 checks in headless Chromium against the real API, through **both** transports: listing, filters, login, `event_full` rejection, register/cancel, server-side validation, create, "My events", a transparent token refresh, signing up through the e-mailed confirmation link (read from the API's mail log), phone layout, no console errors. `npm run test:e2e -- --dark` repeats it in dark mode. Needs both servers running on a freshly seeded database. |
 

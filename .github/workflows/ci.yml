@@ -23,9 +23,12 @@ jobs:
           php-version: '8.3'
           extensions: pdo_sqlite
           coverage: none
+      - name: Find Composer's cache directory
+        id: composer-cache
+        run: echo "dir=$(composer config cache-files-dir)" >> "$GITHUB_OUTPUT"
       - uses: actions/cache@v4
         with:
-          path: ~/.composer/cache
+          path: ${{ steps.composer-cache.outputs.dir }}
           key: composer-${{ hashFiles('api/composer.lock') }}
       - run: composer install --no-interaction --no-progress
       - run: vendor/bin/pint --test
@@ -97,7 +100,7 @@ jobs:
           npm run build-only
           npx vite preview --port 5173 --strictPort > ../web.log 2>&1 &
           npx playwright-core install --with-deps chromium
-          npx wait-on -t 60000 http://localhost:8000/up http://localhost:5173
+          npx wait-on@9.5.1 -t 60000 http://localhost:8000/up http://localhost:5173
       - name: Run the smoke test
         working-directory: web
         env:
