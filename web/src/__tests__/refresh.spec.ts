@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { graphql } from '@/api/graphql'
 import { rest, unwrap } from '@/api/rest'
+import { refreshTokens } from '@/api/refresh'
 import { onUnauthenticated } from '@/api/session'
 import { getRefreshToken, getToken, setTokens } from '@/api/token'
 
@@ -40,6 +41,20 @@ function calls(): { url: string; auth: string | null }[] {
   })
 }
 
+/** A promise plus the function that settles it, to hold a response back. */
+function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
+  let resolve!: (value: T) => void
+  const promise = new Promise<T>((r) => (resolve = r))
+  return { promise, resolve }
+}
+
+const lastCall = () => calls()[calls().length - 1]
+
+/** The part of `navigator.locks` the refresh uses; jsdom has no Web Locks. */
+type LockRequest = (name: string, callback: () => unknown) => Promise<unknown>
+
+const refreshCalls = () => calls().filter((call) => call.url.endsWith('/auth/refresh'))
+
 /**
  * Answers like the API would: the refresh endpoint swaps refresh-1 for pair 2 (once),
  * and everything else accepts only the newest access token.
@@ -74,6 +89,8 @@ describe('token refresh', () => {
     unregister()
     expired.mockReset()
     fetchMock.mockReset()
+    vi.restoreAllMocks()
+    Reflect.deleteProperty(navigator, 'locks')
   })
 
   it('REST refreshes an expired access token and retries the request once', async () => {
@@ -123,7 +140,121 @@ describe('token refresh', () => {
         : unauthenticated(),
     )
 
-    await expect(unwrap(rest.GET('/me'))).rejects.toMatchObject({ status: 401 })
+    await expect(unwrap(rest.GET('/me'))).rejects.toMatchObject({ code: 'network_error' })
     expect(getRefreshToken()).toBe('refresh-1')
+    expect(getToken()).toBe('access-1')
+    expect(expired).not.toHaveBeenCalled()
+  })
+
+  it('treats a 200 from the refresh endpoint that is not a token pair as unavailable', async () => {
+    fetchMock.mockImplementation(async (input) =>
+      String(input instanceof Request ? input.url : input).endsWith('/auth/refresh')
+        ? new Response('<!doctype html>', { status: 200, headers: { 'Content-Type': 'text/html' } })
+        : unauthenticated(),
+    )
+
+    await expect(refreshTokens()).resolves.toBe('unavailable')
+    expect(getRefreshToken()).toBe('refresh-1')
+  })
+
+  it('GraphQL keeps the session when the refresh endpoint is unreachable', async () => {
+    fetchMock.mockImplementation(async (input) =>
+      String(input instanceof Request ? input.url : input).endsWith('/auth/refresh')
+        ? Promise.reject(new TypeError('Failed to fetch'))
+        : json({ errors: [{ message: 'Unauthenticated.', extensions: { guards: ['sanctum'] } }] }),
+    )
+
+    await expect(graphql('query Me { me { name } }')).rejects.toMatchObject({
+      code: 'network_error',
+    })
+    expect(getRefreshToken()).toBe('refresh-1')
+    expect(expired).not.toHaveBeenCalled()
+  })
+
+  describe('a 401 that arrives after the token was already refreshed', () => {
+    it('REST replays with the new token instead of rotating the pair again', async () => {
+      fakeApi()
+      const late = deferred<Response>()
+      fetchMock.mockImplementationOnce(() => late.promise)
+
+      // Sent with access-1; its 401 is held back until another request's refresh is done.
+      const request = unwrap(rest.GET('/me'))
+      await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledOnce())
+      await expect(refreshTokens()).resolves.toBe('refreshed')
+      late.resolve(unauthenticated())
+
+      await expect(request).resolves.toEqual({ data: user })
+      expect(refreshCalls()).toHaveLength(1)
+      expect(lastCall()).toEqual({ url: '/api/v1/me', auth: 'Bearer access-2' })
+      expect(getRefreshToken()).toBe('refresh-2')
+      expect(expired).not.toHaveBeenCalled()
+    })
+
+    it('GraphQL retries with the new token instead of rotating the pair again', async () => {
+      fakeApi()
+      const late = deferred<Response>()
+      fetchMock.mockImplementationOnce(() => late.promise)
+
+      const operation = graphql('query Me { me { name } }')
+      await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledOnce())
+      await expect(refreshTokens()).resolves.toBe('refreshed')
+      late.resolve(unauthenticated())
+
+      await expect(operation).resolves.toEqual({ me: { name: user.name } })
+      expect(refreshCalls()).toHaveLength(1)
+      expect(lastCall()?.auth).toBe('Bearer access-2')
+      expect(expired).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('across tabs', () => {
+    it('uses the pair another tab stored instead of a copy cached at load', async () => {
+      fakeApi()
+      // Another tab refreshed: it wrote pair 2 straight to the shared storage.
+      localStorage.setItem('gather.token', 'access-2')
+      localStorage.setItem('gather.refreshToken', 'refresh-2')
+
+      await expect(unwrap(rest.GET('/me'))).resolves.toEqual({ data: user })
+      expect(calls()).toEqual([{ url: '/api/v1/me', auth: 'Bearer access-2' }])
+    })
+
+    it('refreshes inside a lock shared by all tabs', async () => {
+      fakeApi()
+      const request = vi.fn<LockRequest>((_name, callback) => Promise.resolve(callback()))
+      Object.defineProperty(navigator, 'locks', { value: { request }, configurable: true })
+
+      await expect(refreshTokens()).resolves.toBe('refreshed')
+      expect(request).toHaveBeenCalledWith('gather-token-refresh', expect.any(Function))
+      expect(getRefreshToken()).toBe('refresh-2')
+    })
+
+    it('does not reuse a refresh token another tab rotated while this one waited', async () => {
+      fakeApi()
+      // The other tab holds the lock, rotates the pair, then lets this tab in.
+      const request = vi.fn<LockRequest>(async (_name, callback) => {
+        localStorage.setItem('gather.token', 'access-2')
+        localStorage.setItem('gather.refreshToken', 'refresh-2')
+        return callback()
+      })
+      Object.defineProperty(navigator, 'locks', { value: { request }, configurable: true })
+
+      await expect(unwrap(rest.GET('/me'))).resolves.toEqual({ data: user })
+      expect(refreshCalls()).toHaveLength(0)
+      expect(lastCall()).toEqual({ url: '/api/v1/me', auth: 'Bearer access-2' })
+      expect(expired).not.toHaveBeenCalled()
+    })
+
+    it('keeps the tokens in memory when storage is unavailable', () => {
+      vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
+        throw new DOMException('denied', 'SecurityError')
+      })
+      vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
+        throw new DOMException('denied', 'SecurityError')
+      })
+
+      setTokens(pair(3))
+      expect(getToken()).toBe('access-3')
+      expect(getRefreshToken()).toBe('refresh-3')
+    })
   })
 })

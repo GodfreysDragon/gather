@@ -24,7 +24,8 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->throttleApi();
         // The web routes are stateless pages (the docs and an index), so they need no
-        // session, cookies or CSRF protection, and therefore no encryption key.
+        // session, cookies or CSRF protection. (The app key is still required: it signs
+        // the e-mail confirmation links.)
         $middleware->web(remove: [
             EncryptCookies::class,
             AddQueuedCookiesToResponse::class,

@@ -13,6 +13,13 @@ class CancelRegistration
 {
     public function handle(Event $event, User $user): bool
     {
-        return $event->registrations()->where('user_id', $user->id)->delete() > 0;
+        $cancelled = $event->registrations()->where('user_id', $user->id)->delete() > 0;
+
+        if ($cancelled) {
+            // The seat count changed, so the event belongs in the updated_since feed again.
+            $event->touch();
+        }
+
+        return $cancelled;
     }
 }

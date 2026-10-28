@@ -14,10 +14,24 @@ const fetchMock = vi.hoisted(() => {
 })
 
 const replace = vi.fn<(to: unknown) => Promise<void>>()
-vi.mock('vue-router', () => ({
-  useRouter: () => ({ replace }),
-  useRoute: () => ({ query: {} }),
-}))
+const route = vi.hoisted(() => ({ query: {} as Record<string, string> }))
+vi.mock('vue-router', async (importOriginal) => {
+  const { createMemoryHistory, createRouter } = await importOriginal<typeof import('vue-router')>()
+  // A real router for `resolve`, with the app's kinds of routes, including its catch-all.
+  const Page = { template: '<div />' }
+  const router = createRouter({
+    history: createMemoryHistory(),
+    routes: [
+      { path: '/', name: 'events', component: Page },
+      { path: '/me', name: 'my-events', component: Page },
+      { path: '/:pathMatch(.*)*', name: 'not-found', component: Page },
+    ],
+  })
+  return {
+    useRouter: () => ({ replace, resolve: router.resolve }),
+    useRoute: () => route,
+  }
+})
 
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), {
@@ -48,6 +62,64 @@ describe('auth screens', () => {
   afterEach(() => {
     fetchMock.mockReset()
     replace.mockReset()
+    route.query = {}
+  })
+
+  async function logIn(wrapper: ReturnType<typeof mountView>): Promise<void> {
+    fetchMock.mockResolvedValueOnce(
+      json({
+        token: 'access-1',
+        token_type: 'Bearer',
+        expires_at: '2026-11-01T19:00:00Z',
+        refresh_token: 'refresh-1',
+        refresh_token_expires_at: '2026-12-01T18:00:00Z',
+        user: { id: 7, name: 'Ada', email: 'ada@example.com' },
+      }),
+    )
+    await wrapper.get('[data-testid="email"]').setValue('ada@example.com')
+    await wrapper.get('[data-testid="password"]').setValue('correct horse')
+    await wrapper.get('form').trigger('submit')
+    await flushPromises()
+  }
+
+  it('goes back to the page that asked for a login', async () => {
+    route.query = { redirect: '/me?page=2' }
+    await logIn(mountView(AuthView, { mode: 'login' }))
+
+    expect(replace).toHaveBeenCalledWith('/me?page=2')
+  })
+
+  it.each([
+    '//evil.example',
+    '/\\evil.example',
+    '/\\/evil.example',
+    'https://evil.example',
+    '/no-such-page',
+  ])('ignores a redirect to %s and goes to the events', async (redirect) => {
+    route.query = { redirect }
+    await logIn(mountView(AuthView, { mode: 'login' }))
+
+    expect(replace).toHaveBeenCalledWith({ name: 'events' })
+  })
+
+  it('switching from register to log in drops the "check your inbox" notice', async () => {
+    fetchMock.mockResolvedValueOnce(json(checkInbox, 202))
+    const wrapper = mountView(AuthView, { mode: 'register' })
+    await wrapper.get('#name').setValue('Ada')
+    await wrapper.get('[data-testid="email"]').setValue('ada@example.com')
+    await wrapper.get('[data-testid="password"]').setValue('correct horse')
+    await wrapper.get('form').trigger('submit')
+    await flushPromises()
+    expect(wrapper.find('[data-testid="check-inbox"]').exists()).toBe(true)
+
+    await wrapper.setProps({ mode: 'login' })
+
+    expect(wrapper.find('[data-testid="check-inbox"]').exists()).toBe(false)
+    expect(wrapper.get('h1').text()).toBe('Log in to Gather')
+    expect((wrapper.get('[data-testid="password"]').element as HTMLInputElement).value).toBe('')
+    expect((wrapper.get('[data-testid="email"]').element as HTMLInputElement).value).toBe(
+      'ada@example.com',
+    )
   })
 
   it('registering shows "check your inbox" and logs nobody in', async () => {

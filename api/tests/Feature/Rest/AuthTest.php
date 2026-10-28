@@ -3,7 +3,9 @@
 namespace Tests\Feature\Rest;
 
 use App\Models\User;
+use Illuminate\Encryption\MissingAppKeyException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\URL;
 use Tests\TestCase;
 
 class AuthTest extends TestCase
@@ -104,5 +106,29 @@ class AuthTest extends TestCase
 
         $unknownEmail->assertUnprocessable();
         $this->assertSame($wrongPassword->json(), $unknownEmail->json());
+    }
+
+    public function test_credential_guessing_is_also_capped_per_ip_across_addresses(): void
+    {
+        foreach (range(1, 30) as $attempt) {
+            $this->postJson('/api/v1/auth/login', ['email' => "user{$attempt}@example.com", 'password' => 'guess'])->assertUnprocessable();
+        }
+
+        $this->postJson('/api/v1/auth/login', ['email' => 'one-more@example.com', 'password' => 'guess'])->assertTooManyRequests();
+    }
+
+    public function test_a_non_string_email_is_a_validation_error_not_a_crash(): void
+    {
+        $this->postJson('/api/v1/auth/login', ['email' => ['ada@example.com'], 'password' => 'guess'])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('email');
+    }
+
+    public function test_confirmation_links_cannot_be_signed_without_an_app_key(): void
+    {
+        config(['app.key' => '']);
+
+        $this->expectException(MissingAppKeyException::class);
+        URL::temporarySignedRoute('v1.auth.verification.verify', now()->addHour(), ['id' => 1, 'hash' => 'x'], absolute: false);
     }
 }

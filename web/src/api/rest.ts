@@ -12,6 +12,8 @@ export { API_ORIGIN }
 const startedAt = new WeakMap<Request, number>()
 /** An unread copy of each authenticated request, so it can be replayed after a token refresh. */
 const replayable = new WeakMap<Request, Request>()
+/** The access token each request was sent with, to tell a stale 401 from a fresh one. */
+const sentWith = new WeakMap<Request, string>()
 
 /** Requests whose 401 means "wrong credentials", not "expired token". */
 const NO_RETRY = /\/auth\/(logout|login|refresh)$/
@@ -21,7 +23,10 @@ const auth: Middleware = {
     const token = getToken()
     if (token) request.headers.set('Authorization', `Bearer ${token}`)
     request.headers.set('Accept', 'application/json')
-    if (token) replayable.set(request, request.clone())
+    if (token) {
+      replayable.set(request, request.clone())
+      sentWith.set(request, token)
+    }
     startedAt.set(request, performance.now())
     return request
   },
@@ -37,10 +42,20 @@ const auth: Middleware = {
     }
 
     const copy = replayable.get(request)
-    if (copy && (await refreshTokens())) {
-      copy.headers.set('Authorization', `Bearer ${getToken()}`)
-      return replay(copy)
+    if (!copy) {
+      notifyUnauthenticated()
+      return response
     }
+
+    // The token was already replaced (by a refresh that finished after this request left,
+    // or by another tab): use the new one rather than rotating the pair yet again.
+    const current = getToken()
+    if (current && current !== sentWith.get(request)) return replay(copy, current)
+
+    const result = await refreshTokens()
+    if (result === 'refreshed') return replay(copy, getToken())
+    // Couldn't ask (offline, API failing): fail like a network error but keep the session.
+    if (result === 'unavailable') throw networkError(API_ORIGIN)
 
     notifyUnauthenticated()
     return response
@@ -48,7 +63,8 @@ const auth: Middleware = {
 }
 
 /** Sends a request again once, with the fresh token, and logs it like any other call. */
-async function replay(request: Request): Promise<Response> {
+async function replay(request: Request, token: string | null): Promise<Response> {
+  request.headers.set('Authorization', `Bearer ${token}`)
   startedAt.set(request, performance.now())
   const response = await fetch(request)
   recordApiCall({

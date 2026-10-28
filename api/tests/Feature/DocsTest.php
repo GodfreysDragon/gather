@@ -57,4 +57,13 @@ class DocsTest extends TestCase
 
         $this->graphQL(Introspection::getIntrospectionQuery())->assertGraphQLErrorFree();
     }
+
+    public function test_introspection_still_has_a_depth_cap(): void
+    {
+        // Introspection types are cyclic, so without a cap one small query could ask for an enormous response.
+        $nested = str_repeat('ofType { ', 20).'name'.str_repeat(' }', 20);
+
+        $this->graphQL("{ __schema { types { fields { type { {$nested} } } } } }")
+            ->assertJsonPath('errors.0.message', fn (string $message) => str_starts_with($message, 'Max query depth should be'));
+    }
 }

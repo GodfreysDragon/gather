@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { reactive, ref, useTemplateRef } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { reactive, ref, useTemplateRef, watch } from 'vue'
+import { useRoute, useRouter, type RouteLocationRaw } from 'vue-router'
 import { toApiError, type ApiError } from '@/api/errors'
 import ErrorAlert from '@/components/ErrorAlert.vue'
 import { useAuthStore } from '@/stores/auth'
@@ -22,6 +22,32 @@ const fieldError = (field: string) => error.value?.fieldErrors[field]?.[0]
 const describedBy = (field: string) => (fieldError(field) ? `${field}-error` : undefined)
 const formEl = useTemplateRef<HTMLFormElement>('formRef')
 
+// Login and register share this instance, so switching between them must not carry
+// over the "check your inbox" notice, errors or the password. The e-mail is kept.
+watch(
+  () => props.mode,
+  () => {
+    form.name = ''
+    form.password = ''
+    error.value = null
+    notice.value = null
+  },
+)
+
+/**
+ * Where to go after logging in. `redirect` comes from the URL, so anyone can craft
+ * it: only an app path that resolves to a real page is followed. `//host` and
+ * `/\host` look like paths but browsers read them as other sites.
+ */
+function redirectTarget(): RouteLocationRaw {
+  const redirect = route.query.redirect
+  if (typeof redirect === 'string' && /^\/(?![/\\])/.test(redirect)) {
+    const target = router.resolve(redirect)
+    if (target.matched.length > 0 && target.name !== 'not-found') return target.fullPath
+  }
+  return { name: 'events' }
+}
+
 async function submit(): Promise<void> {
   submitting.value = true
   error.value = null
@@ -33,10 +59,7 @@ async function submit(): Promise<void> {
     }
     await auth.login(form.email, form.password)
 
-    const redirect = route.query.redirect
-    await router.replace(
-      typeof redirect === 'string' && redirect.startsWith('/') ? redirect : { name: 'events' },
-    )
+    await router.replace(redirectTarget())
   } catch (e) {
     error.value = toApiError(e)
     if (error.value.isValidation) void focusFirstInvalid(formEl.value)

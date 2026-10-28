@@ -176,7 +176,10 @@ export interface paths {
          *     **Change feed.** `updated_since` returns every event changed at or after that instant,
          *     oldest change first and always cursor-paginated, so sync clients can resume where they
          *     stopped. Deleted events appear as tombstones: the usual representation with `deleted_at`
-         *     set. It can't be combined with `sort`.
+         *     set. It can't be combined with `sort`. Registrations and cancellations count as changes,
+         *     so seat counts stay current. An event its organizer moves back to draft simply stops
+         *     appearing for everyone else (a tombstone would reveal the draft), so long-lived clients
+         *     should re-sync from scratch now and then.
          */
         get: operations["listEvents"];
         put?: never;
@@ -723,7 +726,15 @@ export interface operations {
                     "application/json": components["schemas"]["TokenResponse"];
                 };
             };
-            403: components["responses"]["Forbidden"];
+            /** @description The link expired or was altered (`verification-link-expired`); ask for a new one. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["Problem"];
+                };
+            };
             /** @description The link was already used or no longer matches the account. */
             410: {
                 headers: {
@@ -1042,6 +1053,7 @@ export interface operations {
             /** @description A page of registrations */
             200: {
                 headers: {
+                    ETag: components["headers"]["ETag"];
                     [name: string]: unknown;
                 };
                 content: {
@@ -1052,6 +1064,7 @@ export interface operations {
                     };
                 };
             };
+            304: components["responses"]["NotModified"];
             401: components["responses"]["Unauthenticated"];
             403: components["responses"]["Forbidden"];
             404: components["responses"]["NotFound"];

@@ -3,6 +3,8 @@
 namespace App\Notifications;
 
 use App\Models\User;
+use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
 use Illuminate\Support\Facades\URL;
@@ -12,8 +14,10 @@ use Illuminate\Support\Facades\URL;
  * signed parameters to POST /api/v1/auth/email/verify/{id}/{hash} and, on success,
  * receives the account's first tokens.
  */
-class VerifyEmailAddress extends Notification
+class VerifyEmailAddress extends Notification implements ShouldQueue
 {
+    use Queueable;
+
     public const EXPIRES_IN_MINUTES = 60;
 
     /**

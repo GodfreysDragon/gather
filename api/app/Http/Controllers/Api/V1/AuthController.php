@@ -10,6 +10,7 @@ use App\Http\Resources\UserResource;
 use App\Models\User;
 use App\Notifications\AccountAlreadyExists;
 use App\Notifications\VerifyEmailAddress;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
@@ -52,14 +53,27 @@ class AuthController extends Controller
 
         $existing = User::where('email', $data['email'])->first();
 
-        if ($existing !== null) {
+        if ($existing === null) {
+            try {
+                User::create($data)->notify(new VerifyEmailAddress);
+
+                return $this->accepted();
+            } catch (UniqueConstraintViolationException) {
+                // A concurrent registration for the same address got there first.
+                $existing = User::where('email', $data['email'])->firstOrFail();
+            }
+        }
+
+        if ($existing->hasVerifiedEmail()) {
             // Hash anyway, so this path takes as long as creating an account.
             Hash::make($data['password']);
-            $existing->hasVerifiedEmail()
-                ? $existing->notify(new AccountAlreadyExists)
-                : $existing->notify(new VerifyEmailAddress);
+            $existing->notify(new AccountAlreadyExists);
         } else {
-            User::create($data)->notify(new VerifyEmailAddress);
+            // Until the address is confirmed the account belongs to nobody, so the latest
+            // registration wins. Keeping the first password would let someone register
+            // another person's address in advance and still log in after they confirm it.
+            $existing->forceFill(['name' => $data['name'], 'password' => $data['password']])->save();
+            $existing->notify(new VerifyEmailAddress);
         }
 
         return $this->accepted();
