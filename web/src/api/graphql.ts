@@ -100,7 +100,16 @@ async function execute<TData>(
     // The token we sent expired: refresh it and run the operation again, once. The
     // guard rejected it before any resolver ran, so repeating a mutation is safe.
     if (apiError.status === 401 && token) {
-      if (!retried && (await refreshTokens())) return execute<TData>(query, variables, true)
+      if (!retried) {
+        // A refresh (here or in another tab) already replaced the token we sent: just retry.
+        const current = getToken()
+        if (current && current !== token) return execute<TData>(query, variables, true)
+
+        const result = await refreshTokens()
+        if (result === 'refreshed') return execute<TData>(query, variables, true)
+        // Couldn't ask (offline, API failing): fail like a network error but keep the session.
+        if (result === 'unavailable') throw networkError(API_ORIGIN)
+      }
       notifyUnauthenticated()
     }
     throw apiError

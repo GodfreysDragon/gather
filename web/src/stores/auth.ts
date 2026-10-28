@@ -45,10 +45,11 @@ export const useAuthStore = defineStore('auth', () => {
           clearSession()
           ready.value = true
         }
-      } finally {
-        restoring = null
       }
-    })()
+    })().finally(() => {
+      // Here rather than inside, which may run before `restoring` is even assigned.
+      restoring = null
+    })
     return restoring
   }
 
@@ -56,6 +57,16 @@ export const useAuthStore = defineStore('auth', () => {
   function clearSession(): void {
     clearTokens()
     user.value = null
+  }
+
+  /** Another tab logged in or out. The tokens are shared already; catch the user up. */
+  function followOtherTab(signedIn: boolean): void {
+    if (!signedIn) {
+      clearSession()
+      return
+    }
+    ready.value = false
+    void restoreSession()
   }
 
   function startSession(response: TokenResponse): void {
@@ -110,6 +121,7 @@ export const useAuthStore = defineStore('auth', () => {
     isAuthenticated,
     restoreSession,
     clearSession,
+    followOtherTab,
     login,
     register,
     verifyEmail,
