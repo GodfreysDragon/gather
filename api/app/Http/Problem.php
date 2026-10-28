@@ -6,6 +6,7 @@ use App\Exceptions\DomainException;
 use Illuminate\Auth\AuthenticationException;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Routing\Exceptions\InvalidSignatureException;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpFoundation\Response;
@@ -26,7 +27,12 @@ class Problem
             $e instanceof ValidationException => self::make(422, 'Validation failed', $e->getMessage(), 'validation_failed', [
                 'errors' => $e->errors(),
             ]),
-            $e instanceof AuthenticationException => self::make(401, 'Unauthenticated', 'A valid bearer token is required.'),
+            // Keep a specific reason (e.g. a rejected refresh token); the framework's default message says nothing.
+            $e instanceof AuthenticationException => self::make(401, 'Unauthenticated', $e->getMessage() !== 'Unauthenticated.'
+                ? $e->getMessage()
+                : 'A valid bearer token is required.'),
+            // Only the e-mail confirmation route is signed, so a bad signature means an expired or altered link.
+            $e instanceof InvalidSignatureException => self::make(403, 'Confirmation link expired', 'This confirmation link has expired or was altered. Ask for a new one.', 'verification_link_expired'),
             $e instanceof DomainException => self::make($e->status(), $e->title(), $e->getMessage(), $e->errorCode()),
             $e instanceof HttpExceptionInterface => self::fromHttpException($e),
             default => self::make(500, 'Server error', config('app.debug') ? $e->getMessage() : 'Something went wrong.'),

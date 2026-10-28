@@ -20,6 +20,13 @@ use Laravel\Sanctum\PersonalAccessToken;
 class TokenIssuer
 {
     /**
+     * A repeat within this many seconds of a token's first use is a client race (two
+     * tabs refreshing at once, a retry after a lost response), not theft: it's refused,
+     * but the login survives.
+     */
+    public const REUSE_GRACE_SECONDS = 10;
+
+    /**
      * @return array{token: string, token_type: string, expires_at: ?string, refresh_token: string, refresh_token_expires_at: string}
      */
     public function issue(User $user, string $name, ?string $family = null): array
@@ -54,24 +61,31 @@ class TokenIssuer
      */
     public function refresh(string $plain): array
     {
-        $outcome = DB::transaction(function () use ($plain) {
-            $refresh = RefreshToken::query()
-                ->where('token_hash', hash('sha256', $plain))
-                ->lockForUpdate()
-                ->first();
+        $refresh = RefreshToken::query()->where('token_hash', hash('sha256', $plain))->first();
 
-            if ($refresh === null || $refresh->isExpired()) {
-                return null;
-            }
+        if ($refresh === null || $refresh->isExpired()) {
+            throw $this->invalid();
+        }
 
-            if ($refresh->used_at !== null) {
-                // A rotated-out token came back: treat it as stolen.
+        // Claim the token with one conditional UPDATE, so of two concurrent requests with
+        // the same token exactly one wins. (Row locks would do nothing on SQLite.)
+        $claimed = RefreshToken::query()
+            ->whereKey($refresh->getKey())
+            ->whereNull('used_at')
+            ->update(['used_at' => now()]);
+
+        if ($claimed === 0) {
+            $usedAt = $refresh->fresh()?->used_at;
+
+            // A rotated-out token came back later: treat it as stolen.
+            if ($usedAt === null || $usedAt->addSeconds(self::REUSE_GRACE_SECONDS)->isPast()) {
                 $this->revokeFamily($refresh->family);
-
-                return null;
             }
 
-            $refresh->update(['used_at' => now()]);
+            throw $this->invalid();
+        }
+
+        return DB::transaction(function () use ($refresh) {
             // The access token it was issued with is replaced by the new one.
             PersonalAccessToken::query()->whereKey($refresh->access_token_id)->delete();
 
@@ -80,9 +94,11 @@ class TokenIssuer
                 'tokens' => $this->issue($refresh->user, $refresh->name, $refresh->family),
             ];
         });
+    }
 
-        // Thrown outside the transaction, so a revoked family stays revoked.
-        return $outcome ?? throw new AuthenticationException('The refresh token is invalid or has expired.');
+    private function invalid(): AuthenticationException
+    {
+        return new AuthenticationException('The refresh token is invalid or has expired.');
     }
 
     /**

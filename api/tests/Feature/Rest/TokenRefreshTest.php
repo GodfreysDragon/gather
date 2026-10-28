@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Rest;
 
+use App\Auth\TokenIssuer;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -51,7 +52,8 @@ class TokenRefreshTest extends TestCase
         $first = $this->login();
         $second = $this->postJson('/api/v1/auth/refresh', ['refresh_token' => $first['refresh_token']])->assertOk()->json();
 
-        // Someone replays the old token, e.g. after copying it.
+        // Someone replays the old token later, e.g. after copying it.
+        $this->travel(TokenIssuer::REUSE_GRACE_SECONDS + 1)->seconds();
         $this->postJson('/api/v1/auth/refresh', ['refresh_token' => $first['refresh_token']])->assertUnauthorized();
 
         $this->assertTokenWorks($second['token'], works: false);
@@ -64,7 +66,8 @@ class TokenRefreshTest extends TestCase
 
         $this->postJson('/api/v1/auth/refresh', ['refresh_token' => 'not-a-token'])
             ->assertUnauthorized()
-            ->assertHeader('Content-Type', 'application/problem+json');
+            ->assertHeader('Content-Type', 'application/problem+json')
+            ->assertJsonPath('detail', 'The refresh token is invalid or has expired.');
 
         $this->travel(31)->days();
         $this->postJson('/api/v1/auth/refresh', ['refresh_token' => $tokens['refresh_token']])->assertUnauthorized();
@@ -89,5 +92,27 @@ class TokenRefreshTest extends TestCase
 
         $this->assertTokenWorks($laptop['token']);
         $this->postJson('/api/v1/auth/refresh', ['refresh_token' => $laptop['refresh_token']])->assertOk();
+    }
+
+    public function test_refresh_limits_are_per_token_so_people_sharing_an_ip_do_not_collide(): void
+    {
+        foreach (range(1, 10) as $attempt) {
+            $this->postJson('/api/v1/auth/refresh', ['refresh_token' => 'stolen-guess'])->assertUnauthorized();
+        }
+        $this->postJson('/api/v1/auth/refresh', ['refresh_token' => 'stolen-guess'])->assertTooManyRequests();
+
+        // A colleague behind the same IP still refreshes normally.
+        $this->postJson('/api/v1/auth/refresh', ['refresh_token' => $this->login()['refresh_token']])->assertOk();
+    }
+
+    public function test_a_duplicate_refresh_seconds_later_is_refused_without_ending_the_login(): void
+    {
+        $first = $this->login();
+        // Two tabs, or a retry after a lost response, present the same token at once.
+        $winner = $this->postJson('/api/v1/auth/refresh', ['refresh_token' => $first['refresh_token']])->assertOk()->json();
+        $this->postJson('/api/v1/auth/refresh', ['refresh_token' => $first['refresh_token']])->assertUnauthorized();
+
+        $this->assertTokenWorks($winner['token']);
+        $this->postJson('/api/v1/auth/refresh', ['refresh_token' => $winner['refresh_token']])->assertOk();
     }
 }

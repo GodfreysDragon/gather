@@ -56,10 +56,11 @@ class RegisterForEvent
                 throw new EventFullException($event);
             }
 
-            return [
-                'registration' => $event->registrations()->create(['user_id' => $user->id]),
-                'created' => true,
-            ];
+            $registration = $event->registrations()->create(['user_id' => $user->id]);
+            // The seat count changed, so the event belongs in the updated_since feed again.
+            $event->touch();
+
+            return ['registration' => $registration, 'created' => true];
         });
     }
 }

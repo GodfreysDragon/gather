@@ -3,6 +3,8 @@
 namespace App\Notifications;
 
 use App\Models\User;
+use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
 
@@ -11,8 +13,10 @@ use Illuminate\Notifications\Notification;
  * already has an account. Registration answers the same either way, so only the
  * address's owner learns that the account exists.
  */
-class AccountAlreadyExists extends Notification
+class AccountAlreadyExists extends Notification implements ShouldQueue
 {
+    use Queueable;
+
     /**
      * @return list<string>
      */

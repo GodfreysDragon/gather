@@ -80,6 +80,22 @@ class EmailVerificationTest extends TestCase
         Notification::assertSentToTimes(User::where('email', 'ada@example.com')->firstOrFail(), VerifyEmailAddress::class, 2);
     }
 
+    public function test_an_earlier_unconfirmed_registration_cannot_keep_access_to_the_account(): void
+    {
+        // Someone registers another person's address first, with a password they know.
+        $this->postJson('/api/v1/auth/register', ['name' => 'Mallory', 'email' => 'ada@example.com', 'password' => 'mallory knows this'])
+            ->assertAccepted();
+
+        // The address's owner registers too, then confirms from their inbox.
+        $this->register()->assertAccepted();
+        $user = User::where('email', 'ada@example.com')->firstOrFail();
+        $this->postJson($this->verificationRequest($user))->assertOk()->assertJsonPath('user.name', 'Ada');
+
+        $this->postJson('/api/v1/auth/login', ['email' => 'ada@example.com', 'password' => 'correct horse'])->assertOk();
+        $this->postJson('/api/v1/auth/login', ['email' => 'ada@example.com', 'password' => 'mallory knows this'])
+            ->assertUnprocessable();
+    }
+
     public function test_the_link_confirms_the_address_and_logs_the_user_in(): void
     {
         $this->register()->assertAccepted();
@@ -112,10 +128,14 @@ class EmailVerificationTest extends TestCase
         $user = User::where('email', 'ada@example.com')->firstOrFail();
         $request = $this->verificationRequest($user);
 
-        $this->postJson(str_replace("/verify/{$user->id}/", '/verify/999/', $request))->assertForbidden();
+        $this->postJson(str_replace("/verify/{$user->id}/", '/verify/999/', $request))
+            ->assertForbidden()
+            ->assertJsonPath('type', url('/problems/verification-link-expired'));
 
         $this->travel(VerifyEmailAddress::EXPIRES_IN_MINUTES + 1)->minutes();
-        $this->postJson($request)->assertForbidden();
+        $this->postJson($request)
+            ->assertForbidden()
+            ->assertJsonPath('type', url('/problems/verification-link-expired'));
 
         $this->assertFalse($user->fresh()->hasVerifiedEmail());
     }

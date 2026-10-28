@@ -131,4 +131,20 @@ class EventFeedTest extends TestCase
         $this->assertSame(array_column($rest, 'id'), $graphqlIds);
         $this->assertNotNull($next->json('data.eventChanges.data.1.deletedAt'));
     }
+
+    public function test_registrations_put_the_event_back_in_the_feed_with_its_new_seat_count(): void
+    {
+        $this->travelTo(now()->subDay());
+        $event = Event::factory()->capacity(10)->create();
+        $this->travelBack();
+        $since = now()->subMinute()->toIso8601String();
+        $query = '/api/v1/events?'.http_build_query(['updated_since' => $since]);
+
+        $this->getJson($query)->assertOk()->assertJsonCount(0, 'data');
+
+        Sanctum::actingAs(User::factory()->create());
+        $this->putJson("/api/v1/events/{$event->id}/registration")->assertCreated();
+
+        $this->getJson($query)->assertOk()->assertJsonCount(1, 'data')->assertJsonPath('data.0.spots_left', 9);
+    }
 }
